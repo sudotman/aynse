@@ -1,45 +1,52 @@
-Introduction to jugaad-data
+Introduction to aynse
 ===========================
 
-``jugad-data`` is a library to fetch live as well as historical stock data. The library supports below functionalities-
+``aynse`` is a python library to fetch stock market data from
+National Stock Exchange (India). 
 
-- Download bhavcopy for stocks, index and derivatives
-- Download historical stock data
-- Download historical derivatives data
-- Fetch live quotes for stocks and derivatives
-- Fetch live index and turnover data
-- Fetch option chains
+It is a fork of a library called ``aynse``, which is not maintained any more.
+This library tries to keep the lean and simple spirit of the original library alive,
+while modernising the internals.
 
-Currently the library supports NSE.
+Where to get it
+---------------
+The source code is currently hosted on GitHub at:
+https://github.com/a-y-n/aynse
 
-Documentation and Resources
-===========================
+Binary installers for the latest released version are available at the
+`Python package index`_
 
-Detailed documentation: https://marketsetup.in/documentation/jugaad-data/
+.. _Python package index: https://pypi.org/project/aynse
 
-Example usage: https://marketsetup.in/tags/jugaad-data/
+Detailed documentation: https://github.com/a-y-n/aynse
+
+Example usage: https://github.com/a-y-n/aynse
+
 
 Installation
-============
+------------
+You can install it using pip.
 
-``pip install jugaad-data``
+``pip install aynse``
 
+Dependencies
+------------
+- `numpy`_
+- `pandas`_
+- `requests`_
+- `lxml`_
+- `beautifulsoup4`_
+- `html5lib`_
+- `pytz`_
+- `datetime`_
+- `openpyxl`_
 
-Quick Start
-===========
-
-.. code-block:: python
-
-        from datetime import date
-        from jugaad_data.nse import bhavcopy_save, bhavcopy_fo_save
-
-        # Download bhavcopy
-        bhavcopy_save(date(2020,1,1), "/path/to/directory")
-
-        # Download bhavcopy for futures and options
-        bhavcopy_fo_save(date(2020,1,1), "/path/to/directory")
-
-        # Download stock data to pandas dataframe
-        from jugaad_data.nse import stock_df
-        df = stock_df(symbol="SBIN", from_date=date(2020,1,1),
-                to_date=date(2020,1,30), series="EQ")
+.. _numpy: https://numpy.org/
+.. _pandas: https://pandas.pydata.org/
+.. _requests: https://requests.readthedocs.io/en/master/
+.. _lxml: https://lxml.de/
+.. _beautifulsoup4: https://www.crummy.com/software/BeautifulSoup/bs4/doc/
+.. _html5lib: https://html5lib.org/
+.. _pytz: https://pytz.sourceforge.io/
+.. _datetime: https://docs.python.org/3/library/datetime.html
+.. _openpyxl: https://openpyxl.readthedocs.io/en/stable/

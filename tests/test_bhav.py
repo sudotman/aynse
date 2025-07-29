@@ -1,5 +1,5 @@
 from datetime import date
-from jugaad_data.nse import bhavcopy_raw, full_bhavcopy_raw, bhavcopy_fo_raw, bhavcopy_index_raw, expiry_dates, bulk_deals_raw
+from aynse.nse import bhavcopy_raw, full_bhavcopy_raw, bhavcopy_fo_raw, bhavcopy_index_raw, expiry_dates, bulk_deals_raw
 import pytest
 import requests
 

@@ -1,7 +1,7 @@
 from requests import Session
 from bs4 import BeautifulSoup
 
-from jugaad_data.rbi.historical import policy_rate_archive
+from .historical import policy_rate_archive
 
 
 def tr_to_json(wrapper):

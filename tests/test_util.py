@@ -1,12 +1,17 @@
+import datetime
 import os
-import math
-import pickle
+from unittest.mock import patch, Mock
+import pandas as pd
+from aynse import util as ut
 import pytest
-from jugaad_data import util as ut
-from datetime import date, datetime, timedelta
+import math
+from datetime import date
+from unittest import TestCase
+from appdirs import user_cache_dir
+import pickle
 import time
 from pyfakefs.fake_filesystem_unittest import TestCase
-from appdirs import user_cache_dir
+
 
 def test_break_dates():
     from_date = date(2000, 12, 14)
@@ -34,7 +39,7 @@ def test_np_int():
 
 def test_np_date():
     assert date(2020,1,1) == ut.np_date("2020-01-01")
-    assert date(2020,7,30) == datetime.strptime("30-Jul-2020", "%d-%b-%Y").date()
+    assert date(2020,7,30) == datetime.datetime.strptime("30-Jul-2020", "%d-%b-%Y").date()
     assert date(2020,7,30) == ut.np_date("30-Jul-2020")
     assert ut.np_date("20 Aug 2020") == date(2020, 8, 20)
 
@@ -82,6 +87,10 @@ class DemoClass:
 
 @ut.cached("testapp")
 def demo_crash(a, b):
+    raise Exception("Terrible")
+
+@ut.cached("testapp")
+def demo_crashed(a, b):
     raise Exception("Terrible")
 
 class TestCache(TestCase):
@@ -154,7 +163,7 @@ class QuoteApp:
     time_out = 3
     @ut.live_cache
     def rt_quote(self):
-        return datetime.now()
+        return datetime.datetime.now()
 
 def test_live_cache():
     q = QuoteApp()
@@ -164,4 +173,4 @@ def test_live_cache():
     assert q.rt_quote() == v
     time.sleep(3)
     assert q.rt_quote() > v
- 
+

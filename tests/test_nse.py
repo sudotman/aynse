@@ -9,7 +9,7 @@ import pytest
 import numpy as np
 import pandas as pd
 from appdirs import user_cache_dir
-from jugaad_data import nse
+from aynse import nse
 import click
 import warnings
 h = nse.NSEHistory()
@@ -206,5 +206,5 @@ class TestIndexHistory(TestCase):
 def test_expiry_dates():
     dt = date(2020,1,1)
     expiry_dts = nse.expiry_dates(dt, "FUTIDX", "NIFTY")
-    
-     
+
+

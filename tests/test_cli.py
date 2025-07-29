@@ -3,7 +3,7 @@ import csv
 from click.testing import CliRunner
 from pyfakefs.fake_filesystem_unittest import TestCase
 from appdirs import user_cache_dir
-from jugaad_data.cli import cli
+from aynse.cli import cli
 
 class TestCli(TestCase):
     def setUp(self):
@@ -93,4 +93,4 @@ class TestCli(TestCase):
     #         assert rows[1][1] == "31 Mar 2020"
     #         assert rows[-1][1] == "01 Jan 2020"
     #         assert len(rows) > 50
-       
+

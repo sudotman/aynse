@@ -1,4 +1,4 @@
-from jugaad_data.nse.live import NSELive
+from aynse.nse.live import NSELive
 from datetime import date, datetime
 n = NSELive()
 def test_stock_quote():

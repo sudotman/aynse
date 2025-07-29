@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for your interest in Jugaad-data! 🚀
+        Thanks for your interest in aynse! 🚀
   - type: textarea
     id: description
     attributes:
@@ -26,7 +26,7 @@ body:
         If I (or someone) can copy it, run it, and see it right away, there's a much higher chance I (or someone) will be able to help you.
 
       placeholder: |
-        from jugaad_data.nse import bhavcopy_save, bhavcopy_fo_save
+        from aynse_data.nse import bhavcopy_save, bhavcopy_fo_save
       render: python
     validations:
       required: true

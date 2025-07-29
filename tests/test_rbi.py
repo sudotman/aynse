@@ -1,4 +1,6 @@
-from jugaad_data.rbi import RBI, policy_rate_archive
+from aynse.rbi import RBI, policy_rate_archive
+from unittest.mock import patch, Mock
+import pandas as pd
 import pytest
 
 def test_policy_rate_archive():

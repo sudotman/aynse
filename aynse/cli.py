@@ -1,11 +1,19 @@
 import os
 import click
-from datetime import date, datetime, timedelta
-from concurrent.futures import ThreadPoolExecutor
+import datetime
+import logging
 import requests
-from jugaad_data import nse
+from datetime import date, timedelta
+from concurrent.futures import ThreadPoolExecutor
 
 
+from aynse import nse
+from aynse import holidays
+from aynse.rbi import RBI
+
+
+
+logging.basicConfig(level=logging.DEBUG)
 
 @click.group()
 def cli():

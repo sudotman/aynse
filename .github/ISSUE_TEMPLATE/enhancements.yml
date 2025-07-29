@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for your interest in Jugaad-data! 🚀
+        Thanks for your interest in aynse! 🚀
   - type: textarea
     id: description
     attributes:

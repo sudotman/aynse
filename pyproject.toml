@@ -3,25 +3,31 @@ requires = ["setuptools >= 61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "jugaad-data"
-version = "0.27"
+name = "aynse"
+version = "0.1.0"
 requires-python = ">= 3.6"
 authors = [{"name"= "jugaad-coder", "email"="abc@xyz.com"}]
-description = "Free Zerodha API python library"
+description = "A lean and modern python library to fetch data from NSE"
 readme = "README.md"
-license = {file = "LICENSE.YOLO.md"}
-keywords = ["NSE", "Live", "Bhavcopy", "History", "Futures", "Options", "Stock Data"]
-dynamic = ["dependencies"]
-
-
-[project.scripts]
-jdata = "jugaad_data.cli:cli"
+license = {text = "YOLO"}
+keywords = ["nse", "bhavcopy", "pro", "library", "finance", "stock", "jugaad", "data", "aynse"]
+classifiers=[
+    "Development Status :: 4 - Beta",
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: The Unlicense (Unlicense)",
+    "Operating System :: OS Independent",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Libraries :: Python Modules"
+]
 
 [project.urls]
-Homepage = "https://marketsetup.in/documentation/jugaad-data/"
-Documentation = "https://marketsetup.in/documentation/jugaad-data/"
-Repository = "https://github.com/jugaad-py/jugaad-data"
-Issues = "https://github.com/jugaad-py/jugaad-data/issues"
+Homepage = "https://github.com/a-y-n/aynse"
+Documentation = "https://github.com/a-y-n/aynse"
+Repository = "https://github.com/a-y-n/aynse"
+Issues = "https://github.com/a-y-n/aynse/issues"
+
+[project.scripts]
+aynse = "aynse.cli:cli"
 
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}

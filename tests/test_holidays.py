@@ -1,5 +1,5 @@
 from datetime import date
-from jugaad_data.holidays import holidays
+from aynse.holidays import holidays
 
 
 def test_holidays():

@@ -8,7 +8,7 @@
 
 ### a. equity bhavcopy (`bhavcopy_raw`) & f&o bhavcopy (`bhavcopy_fo_raw`)
 - **status:** fixed
-- **summary of fix:** repaired the equity and f&o bhavcopy downloads in `jugaad_data/nse/archives.py` to address nse's new api structure effective from **july 8, 2024**. the implementation now handles both the old (json link) and new (direct zip file) formats, including the nested zip archives returned by the new api. a unified response handler (`_handle_bhavcopy_response`) robustly processes the data.
+- **summary of fix:** repaired the equity and f&o bhavcopy downloads in `aynse/nse/archives.py` to address nse's new api structure effective from **july 8, 2024**. the implementation now handles both the old (json link) and new (direct zip file) formats, including the nested zip archives returned by the new api. a unified response handler (`_handle_bhavcopy_response`) robustly processes the data.
 
 ### b. full bhavcopy (`full_bhavcopy_raw`)
 - **status:** fixed
@@ -20,4 +20,12 @@
 
 ### d. RBI policy rate archive
 - **status:** fixed
-- **summary of fix:** the `policy_rate_archive` function in `jugaad_data/rbi/historical.py` was repaired. it now correctly scrapes the policy rates table from the RBI website's new layout. the fix involves finding the correct table within a `div` with class `table-responsive`, parsing it with `pandas`, and cleaning the resulting data to handle extraneous rows.
+- **summary of fix:** the `policy_rate_archive` function in `aynse/rbi/historical.py` was repaired. it now correctly scrapes the policy rates table from the RBI website's new layout. the fix involves finding the correct table within a `div` with class `table-responsive`, parsing it with `pandas`, and cleaning the resulting data to handle extraneous rows.
+
+### rbi policy rates test (`test_rbi.py`)
+
+- **test name:** `test_policy_rates_archive`
+- **status:** <font color="green">pass</font>
+- **summary of fix:** the `policy_rate_archive` function in `aynse/rbi/historical.py` was repaired. it now correctly scrapes the policy rates table from the RBI website's new layout. the fix involves finding the correct table within a `div` with class `table-responsive`, parsing it with `pandas`, and cleaning the resulting data to handle extraneous rows.
+
+## api endpoints that are working as of july 28, 2024
