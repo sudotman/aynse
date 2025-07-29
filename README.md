@@ -4,7 +4,7 @@ https://marketsetup.in/documentation/jugaad-data/
 
 # Introduction
 
-`better-nse-data` is a python library that is lean and modern - a fork of jugaad-data and allows for modern robust regularly-updated ways of fetching data from nse.
+`aynse` is a python library that is lean and modern - a fork of jugaad-data and allows for modern robust regularly-updated ways of fetching data from nse.
 <!-- 
 ![Build Badge](https://github.com/jugaad-py/jugaad-data/actions/workflows/run-tests.yml/badge.svg) -->
 
