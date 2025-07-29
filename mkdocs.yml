@@ -1,0 +1,43 @@
+site_name: aynse
+site_description: 'A lean, modern Python library for fetching data from the National Stock Exchange (NSE) of India.'
+repo_url: https://github.com/a-y-n/aynse
+repo_name: a-y-n/aynse
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - toc.integrate
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.tabs.link
+    - content.code.annotation
+    - content.code.copy
+  language: en
+  palette:
+    - scheme: default
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - scheme: slate
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_root_heading: true
+            show_source: false
+
+nav:
+  - Home: index.md
+  - Historical Data: historical.md
+  - Live Data: live.md
+  - CLI: cli.md
+  - API Reference: api.md
