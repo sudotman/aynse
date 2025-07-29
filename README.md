@@ -4,9 +4,9 @@ https://marketsetup.in/documentation/jugaad-data/
 
 # Introduction
 
-`jugaad-data` is a python library to download historical/live stock, index as well as economic data from NSE and RBI website using.
-
-![Build Badge](https://github.com/jugaad-py/jugaad-data/actions/workflows/run-tests.yml/badge.svg)
+`better-nse-data` is a python library that is lean and modern - a fork of jugaad-data and allows for modern robust regularly-updated ways of fetching data from nse.
+<!-- 
+![Build Badge](https://github.com/jugaad-py/jugaad-data/actions/workflows/run-tests.yml/badge.svg) -->
 
 
 # Features

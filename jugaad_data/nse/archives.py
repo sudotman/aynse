@@ -9,6 +9,8 @@ import csv
 import zipfile
 import requests
 import pprint
+import json
+import gzip
 def unzip(function):
     
     def unzipper(*args, **kwargs):
@@ -23,6 +25,8 @@ def unzip(function):
 
 class NSEArchives:
     base_url = "https://nsearchives.nseindia.com/"
+    nse_api_url = "https://www.nseindia.com/api"
+    cutoff_date = date(2024, 7, 8)  # Date when NSE switched formats
     """Conventions
            d - 1, 12 (without leading zero)
           dd - 01, 21 (day of the month with leading zero)
@@ -37,10 +41,15 @@ class NSEArchives:
     def __init__(self):
         self.s = requests.Session()
         h = {
+            "Host": "www.nseindia.com",
+            "Referer": "https://www.nseindia.com/get-quotes/equity?symbol=SBIN",
+            "X-Requested-With": "XMLHttpRequest",
             "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/84.0.4147.125 Safari/537.36",
-            "accept-encoding": "gzip, deflate",
-            "accept":
-    """text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9""",
+            "accept-encoding": "gzip, deflate, br",
+            "accept": "application/json, text/javascript, */*; q=0.01",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
           
     }
         self.s.headers.update(h)
@@ -50,78 +59,312 @@ class NSEArchives:
                 "bulk_deals": "/content/equities/bulk.csv",
                 "bhavcopy_fo": "/content/historical/DERIVATIVES/{yyyy}/{MMM}/fo{dd}{MMM}{yyyy}bhav.csv.zip"
             }
+          # Establish NSE session for new API endpoints
+        self._setup_nse_session()
+        
+    def _setup_nse_session(self):
+        """Setup NSE session required for new API endpoints"""
+        try:
+            # Visit main page first to establish session
+            print("Setting up NSE session...")
+            r = self.s.get("https://www.nseindia.com/get-quotes/equity?symbol=SBIN", timeout=self.timeout)
+            r.raise_for_status()
+            print("NSE session setup successful.")
+        except Exception as e:
+            # Session setup is best effort, continue even if it fails
+            print(f"Warning: NSE session setup failed: {e}")
+            pass
         
     def get(self, rout, **params):
         url = self.base_url + self._routes[rout].format(**params)
         self.r = self.s.get(url, timeout=self.timeout)
         return self.r
     
-    @unzip
-    def bhavcopy_raw(self, dt):
-        """Downloads raw bhavcopy text for a specific date"""
-        dd = dt.strftime('%d')
-        MMM = dt.strftime('%b').upper()
-        yyyy = dt.year
-        r = self.get("bhavcopy", yyyy=yyyy, MMM=MMM, dd=dd)
-        return r.content
+    def _get_new_bhavcopy(self, dt):
+        """Get bhavcopy using new NSE API (after July 8, 2024)"""
+        date_str = dt.strftime('%d-%b-%Y')
+        
+        url = f"{self.nse_api_url}/reports"
+        params = {
+            'archives': '[{"name":"CM - Bhavcopy (PR.zip)","type":"archives","category":"capital-market","section":"equities"}]',
+            'date': date_str,
+            'type': 'Archives'
+        }
+        
+        response = self.s.get(url, params=params, timeout=self.timeout)
+        return response
     
+    def _get_old_bhavcopy(self, dt):
+        """Get bhavcopy using new NSE API (before July 8, 2024)"""
+        date_str = dt.strftime('%d-%b-%Y')
+        
+        url = f"{self.nse_api_url}/reports"
+        params = {
+            'archives': '[{"name":"CM - Bhavcopy(csv)","type":"archives","category":"capital-market","section":"equities"}]',
+            'date': date_str,
+            'type': 'Archives'
+        }
+        
+        response = self.s.get(url, params=params, timeout=self.timeout)
+        return response
+
+    def _get_new_bhavcopy_fo(self, dt):
+        """Get F&O bhavcopy using new NSE API (after July 8, 2024)"""
+        date_str = dt.strftime('%d-%b-%Y')
+        
+        url = f"{self.nse_api_url}/reports"
+        params = {
+            'archives': '[{"name":"F&O - UDiFF Common Bhavcopy Final (zip)","type":"archives","category":"derivatives","section":"equity"}]',
+            'date': date_str,
+            'type': 'equity',
+            'mode': 'single'
+        }
+
+        response = self.s.get(url, params=params, timeout=self.timeout)
+        return response
+    
+    def _get_old_bhavcopy_fo(self, dt):
+        """Get F&O bhavcopy using old NSE API (before July 8, 2024)"""
+        date_str = dt.strftime('%d-%b-%Y')
+        
+        url = f"{self.nse_api_url}/reports"
+        params = {
+            'archives': '[{"name":"F&O - Bhavcopy(csv)","type":"archives","category":"derivatives","section":"equity"}]',
+            'date': date_str,
+            'type': 'Archives'
+        }
+        response = self.s.get(url, params=params, timeout=self.timeout)
+        return response
+
+    def _handle_bhavcopy_response(self, response):
+        """
+        Handles the response from a bhavcopy request.
+        It may be a JSON response with a download link, or a direct zip file.
+        """
+        # Check for direct file download first by inspecting headers
+        content_type = response.headers.get('Content-Type', '')
+        if 'zip' in content_type or 'octet-stream' in content_type:
+            if response.status_code == 200:
+                return response.content
+            else:
+                raise Exception(f"File download failed with status code {response.status_code}")
+
+        # If not a direct file, try to parse as JSON
+        try:
+            response_data = response.json()
+            if not response_data or len(response_data) == 0:
+                raise Exception("Empty response from API")
+                
+            if 'file' not in response_data[0]:
+                raise Exception("No download link found in API response")
+                
+            download_url = response_data[0]['file']
+            
+            # Download the actual file
+            file_response = self.s.get(download_url, timeout=self.timeout)
+            if file_response.status_code != 200:
+                raise Exception(f"File download failed with status code {file_response.status_code}")
+            
+            return file_response.content
+        except json.JSONDecodeError:
+            # If JSON parsing fails, and it wasn't identified as a zip,
+            # it might still be a direct download without the right content-type.
+            if response.status_code == 200 and response.content:
+                 # Heuristic: Check for zip file signature
+                if response.content.startswith(b'PK\x03\x04'):
+                    return response.content
+            
+            print("Failed to parse JSON and not a recognized file format. Response content:")
+            print(response.text[:500]) # Print first 500 chars
+            raise Exception("Failed to process API response.")
+
+
+    def bhavcopy_raw(self, dt):
+        """Downloads raw bhavcopy text for a specific date
+        
+        Uses new NSE API endpoints with date-based format switching.
+        - Before July 8, 2024: Uses old CSV format API
+        - After July 8, 2024: Uses new ZIP format API with different structure
+        """
+        if dt < self.cutoff_date:
+            response = self._get_old_bhavcopy(dt)
+        else:
+            response = self._get_new_bhavcopy(dt)
+        
+        if response.status_code != 200:
+            # For file not found, NSE might return 404 or other error codes
+            # with a specific message.
+            if "file not available" in response.text.lower():
+                 raise FileNotFoundError(f"Bhavcopy not available for {dt.strftime('%d-%m-%Y')}")
+            raise Exception(f"API request failed with status code {response.status_code}: {response.text}")
+
+        try:
+            file_content = self._handle_bhavcopy_response(response)
+            
+            # Both formats return ZIP files containing CSV data, sometimes nested.
+            fp = io.BytesIO(file_content)
+            with zipfile.ZipFile(file=fp) as zf:
+                # Check for nested zip files first
+                nested_zip_files = [f for f in zf.namelist() if f.lower().endswith('.zip')]
+                
+                if nested_zip_files:
+                    nested_zip_filename = nested_zip_files[0]
+                    with zf.open(nested_zip_filename) as nested_zip_file:
+                        nested_zip_content = nested_zip_file.read()
+                        nested_fp = io.BytesIO(nested_zip_content)
+                        with zipfile.ZipFile(file=nested_fp) as nested_zf:
+                            csv_files = [f for f in nested_zf.namelist() if f.lower().endswith('.csv')]
+                            if not csv_files:
+                                raise Exception("No CSV file found in nested ZIP archive")
+                            
+                            fname = csv_files[0]
+                            with nested_zf.open(fname) as fp_bh:
+                                return fp_bh.read().decode('utf-8')
+                
+                # If no nested zip, look for a CSV file directly
+                csv_files = [f for f in zf.namelist() if f.lower().endswith('.csv')]
+                if not csv_files:
+                    raise Exception("No CSV or nested ZIP file found in the archive.")
+                    
+                fname = csv_files[0]
+                with zf.open(fname) as fp_bh:
+                    return fp_bh.read().decode('utf-8')
+        except Exception as e:
+            raise Exception(f"Error processing bhavcopy data for {dt.strftime('%d-%m-%Y')}: {str(e)}")
     def bhavcopy_save(self, dt, dest, skip_if_present=True):
-        """Downloads and saves raw bhavcopy csv file for a specific date"""
+        """Downloads and saves raw bhavcopy csv file for a specific date
+        
+        Uses new NSE API endpoints with automatic fallback to old archives.
+        """
         fmt = "cm%d%b%Ybhav.csv"
         fname = os.path.join(dest, dt.strftime(fmt))
         if os.path.isfile(fname) and skip_if_present:
             return fname
+        
+        # Use new method that handles both old and new formats
         text = self.bhavcopy_raw(dt)
-        with open(fname, 'w') as fp:
+          # Ensure we got string data
+        if isinstance(text, bytes):
+            text = text.decode('utf-8')
+            
+        with open(fname, 'w', newline='') as fp:
             fp.write(text)
             return fname
-
+    
     def full_bhavcopy_raw(self, dt):
-        """Downloads full raw bhavcopy text for a specific date"""
+        """
+        Downloads full raw bhavcopy text for a specific date.
+        This uses the new API endpoint and works for all dates without a cutoff.
+        The endpoint directly returns the CSV content.
+        """
+        date_str = dt.strftime('%d-%b-%Y')
+        url = f"{self.nse_api_url}/reports"
+        params = {
+            'archives': '[{"name":"Full Bhavcopy and Security Deliverable data","type":"daily-reports","category":"capital-market","section":"equities"}]',
+            'date': date_str,
+            'type': 'equities',
+            'mode': 'single'
+        }
         
-        dd = dt.strftime('%d')
-        mm = dt.strftime('%m')
-        yyyy = dt.year
-        try:
-            r = self.get("bhavcopy_full", yyyy=yyyy, mm=mm, dd=dd)
-        except requests.exceptions.ReadTimeout:
-            if dt < date(2020,1,1): # Receiving timeouts for dates before 2020
-                raise requests.exceptions.ReadTimeout("""Either request timed
-                                                      out or full bhavcopy file is
-                                                      not available for given
-                                                      date (2019 and prior
-                                                      dates)""") 
-        return r.text
+        response = self.s.get(url, params=params, timeout=self.timeout)
+        
+        if response.status_code != 200:
+            if "file not available" in response.text.lower():
+                 raise FileNotFoundError(f"Full Bhavcopy not available for {dt.strftime('%d-%m-%Y')}")
+            response.raise_for_status()
+
+        # The response is expected to be the CSV content directly
+        return response.text
 
     def full_bhavcopy_save(self, dt, dest, skip_if_present=True):
-        fmt = "sec_bhavdata_full_%d%b%Ybhav.csv"
+        fmt = "sec_bhavdata_full_%d%b%Y.csv"
         fname = os.path.join(dest, dt.strftime(fmt))
         if os.path.isfile(fname) and skip_if_present:
             return fname
-        if os.path.isfile(fname):
-            return fname
         text = self.full_bhavcopy_raw(dt)
-        with open(fname, 'w') as fp:
+        with open(fname, 'w', newline='') as fp:
             fp.write(text)
         return fname
 
-    def bulk_deals_raw(self):
-        r = self.get("bulk_deals")
-        return r.text
+    def bulk_deals_raw(self, from_date: date, to_date: date):
+        """
+        Downloads bulk deals for a given date range.
+        :param from_date: From date
+        :param to_date: To date
+        :return: JSON response from the API
+        """
+        from_date_str = from_date.strftime('%d-%m-%Y')
+        to_date_str = to_date.strftime('%d-%m-%Y')
+        
+        url = f"{self.nse_api_url}/historicalOR/bulk-block-short-deals"
+        params = {
+            'optionType': 'bulk_deals',
+            'from': from_date_str,
+            'to': to_date_str,
+        }
+        
+        response = self.s.get(url, params=params, timeout=self.timeout)
+        response.raise_for_status()
+        return response.json()
     
-    def bulk_deals_save(self, fname):
-        text = self.bulk_deals_raw()
+    def bulk_deals_save(self, from_date: date, to_date: date, dest: str):
+        """
+        Saves bulk deals for a given date range to a JSON file.
+        :param from_date: From date
+        :param to_date: To date
+        :param dest: Destination directory
+        :return: Path to the saved file
+        """
+        data = self.bulk_deals_raw(from_date, to_date)
+        fname = os.path.join(dest, f"bulk_deals_{from_date.strftime('%Y%m%d')}_{to_date.strftime('%Y%m%d')}.json")
         with open(fname, 'w') as fp:
-            fp.write(text)
+            json.dump(data, fp)
+        return fname
 
-    @unzip
     def bhavcopy_fo_raw(self, dt):
-        """Downloads raw bhavcopy text for a specific date"""
-        dd = dt.strftime('%d')
-        MMM = dt.strftime('%b').upper()
-        yyyy = dt.year
-        r = self.get("bhavcopy_fo", yyyy=yyyy, MMM=MMM, dd=dd)
-        return r.content
+        """Downloads raw F&O bhavcopy text for a specific date"""
+        if dt < self.cutoff_date:
+            response = self._get_old_bhavcopy_fo(dt)
+        else:
+            response = self._get_new_bhavcopy_fo(dt)
+
+        if response.status_code != 200:
+            if "file not available" in response.text.lower():
+                 raise FileNotFoundError(f"F&O Bhavcopy not available for {dt.strftime('%d-%m-%Y')}")
+            raise Exception(f"API request failed with status code {response.status_code}: {response.text}")
+
+        try:
+            file_content = self._handle_bhavcopy_response(response)
+            
+            fp = io.BytesIO(file_content)
+            with zipfile.ZipFile(file=fp) as zf:
+                # F&O bhavcopy is not expected to be nested, but we check anyway
+                nested_zip_files = [f for f in zf.namelist() if f.lower().endswith('.zip')]
+                
+                if nested_zip_files:
+                    nested_zip_filename = nested_zip_files[0]
+                    with zf.open(nested_zip_filename) as nested_zip_file:
+                        nested_zip_content = nested_zip_file.read()
+                        nested_fp = io.BytesIO(nested_zip_content)
+                        with zipfile.ZipFile(file=nested_fp) as nested_zf:
+                            csv_files = [f for f in nested_zf.namelist() if f.lower().endswith('.csv')]
+                            if not csv_files:
+                                raise Exception("No CSV file found in nested ZIP archive")
+                            
+                            fname = csv_files[0]
+                            with nested_zf.open(fname) as fp_bh:
+                                return fp_bh.read().decode('utf-8')
+                
+                csv_files = [f for f in zf.namelist() if f.lower().endswith('.csv')]
+                if not csv_files:
+                    raise Exception("No CSV file found in the archive.")
+                    
+                fname = csv_files[0]
+                with zf.open(fname) as fp_bh:
+                    return fp_bh.read().decode('utf-8')
+        except Exception as e:
+            raise Exception(f"Error processing F&O bhavcopy data for {dt.strftime('%d-%m-%Y')}: {str(e)}")
+
     
     def bhavcopy_fo_save(self, dt, dest, skip_if_present=True):
         """ Saves Derivatives Bhavcopy to a directory """
@@ -295,6 +538,8 @@ bhavcopy_raw = a.bhavcopy_raw
 bhavcopy_save = a.bhavcopy_save
 full_bhavcopy_raw = a.full_bhavcopy_raw
 full_bhavcopy_save = a.full_bhavcopy_save
+bulk_deals_raw = a.bulk_deals_raw
+bulk_deals_save = a.bulk_deals_save
 bhavcopy_fo_raw = a.bhavcopy_fo_raw
 bhavcopy_fo_save = a.bhavcopy_fo_save
 ia = NSEIndicesArchives()

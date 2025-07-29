@@ -1,5 +1,5 @@
 from datetime import date
-from jugaad_data.nse import bhavcopy_raw, full_bhavcopy_raw, bhavcopy_fo_raw, bhavcopy_index_raw, expiry_dates 
+from jugaad_data.nse import bhavcopy_raw, full_bhavcopy_raw, bhavcopy_fo_raw, bhavcopy_index_raw, expiry_dates, bulk_deals_raw
 import pytest
 import requests
 
@@ -9,15 +9,47 @@ def test_bhavcopy():
     assert "RELIANCE" in r
     assert header in r
 
-# def test_full_bhavcopy():
-#     r = full_bhavcopy_raw(date(2020,1,1))
-#     header = "SYMBOL, SERIES, DATE1, PREV_CLOSE, OPEN_PRICE, HIGH_PRICE, LOW_PRICE, LAST_PRICE, CLOSE_PRICE, AVG_PRICE, TTL_TRD_QNTY, TURNOVER_LACS, NO_OF_TRADES, DELIV_QTY, DELIV_PER"
-#     assert "SBIN" in r
-#     assert header in r
+def test_full_bhavcopy():
+    """Test full bhavcopy download with new API"""
+    # Using a fixed date known to have data to make the test reliable.
+    test_date = date(2024, 7, 24) # A Wednesday
+    
+    try:
+        # Fetch the full bhavcopy data
+        csv_data = full_bhavcopy_raw(test_date)
 
-#     with pytest.raises(requests.exceptions.ReadTimeout) as e:
-#         r = full_bhavcopy_raw(date(2019,1,1))
-#     assert '2019' in e.value.args[0]    
+        # 1. Check if the data is a non-empty string
+        assert isinstance(csv_data, str)
+        assert len(csv_data) > 0
+
+        # 2. Check for CSV-like structure by validating the headers
+        first_line = csv_data.strip().split('\n')[0]
+        headers = [h.strip() for h in first_line.split(',')]
+        
+        expected_headers = ["SYMBOL", "SERIES", "DATE1"]
+        assert headers[:3] == expected_headers, f"Expected headers {expected_headers}, but got {headers[:3]}"
+
+    except FileNotFoundError:
+        pytest.fail(f"Test failed: Full Bhavcopy data not found for {test_date}. The endpoint might be down or the date is a holiday.")
+    except Exception as e:
+        pytest.fail(f"An unexpected error occurred during full_bhavcopy_raw test: {e}")
+
+def test_bulk_deals():
+    """Test bulk deals download with new API"""
+    from_date = date(2025, 7, 22)
+    to_date = date(2025, 7, 29)
+    
+    try:
+        data = bulk_deals_raw(from_date, to_date)
+        assert isinstance(data, dict)
+        assert "data" in data
+        assert isinstance(data["data"], list)
+        if len(data["data"]) > 0:
+            assert "BD_SYMBOL" in data["data"][0]
+            assert "BD_CLIENT_NAME" in data["data"][0]
+
+    except Exception as e:
+        pytest.fail(f"An unexpected error occurred during bulk_deals_raw test: {e}")
 
 def test_bhavcopy_fo():
     r = bhavcopy_fo_raw(date(2020,1,1))

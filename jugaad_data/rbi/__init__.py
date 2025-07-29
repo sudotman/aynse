@@ -1,6 +1,7 @@
 from requests import Session
 from bs4 import BeautifulSoup
 
+from jugaad_data.rbi.historical import policy_rate_archive
 
 
 def tr_to_json(wrapper):
@@ -24,11 +25,10 @@ class RBI:
         self.s = Session()
     
     def current_rates(self):
-        r = self.s.get(self.base_url)
-        
-        bs = BeautifulSoup(r.text, "html.parser")
-        wrapper = bs.find('div', {"id": "wrapper"})
-        trs = wrapper.find_all('tr')
-        return tr_to_json(wrapper)
+        """DEPRECATED: This function is broken because of website changes."""
+        raise DeprecationWarning("This function is broken and will be removed in a future version. Please use policy_rate_archive() instead.")
+
+    def policy_rate_archive(self, n=10):
+        return policy_rate_archive(n)
 
 
