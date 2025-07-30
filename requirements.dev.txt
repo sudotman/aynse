@@ -8,3 +8,4 @@ pandas
 jupyterlab
 twine
 lxml>=4.0.0
+pkginfo>=1.10.0

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aynse"
-version = "0.1.0"
+version = "0.1.1"
 requires-python = ">=3.6"
 authors = [{name = "satyam-kashyap", email = "abc@xyz.com"}]
 description = "A lean and modern python library to fetch data from NSE"
@@ -21,10 +21,10 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/a-y-n/aynse"
-Documentation = "https://github.com/a-y-n/aynse"
-Repository = "https://github.com/a-y-n/aynse"
-Issues = "https://github.com/a-y-n/aynse/issues"
+Homepage = "https://satyamkashyap.com/aynse"
+Documentation = "https://satyamkashyap.com/aynse"
+Repository = "https://github.com/sudotman/aynse"
+Issues = "https://github.com/sudotman/aynse/issues"
 
 [project.scripts]
 aynse = "aynse.cli:cli"
