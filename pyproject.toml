@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aynse"
-version = "0.1.1"
+version = "1.0.0"
 requires-python = ">=3.6"
-authors = [{name = "satyam-kashyap", email = "abc@xyz.com"}]
+authors = [{name = "satyam-kashyap", email = "satyamsudo@gmail.com"}]
 description = "A lean and modern python library to fetch data from NSE"
 readme = "README.md"
-license = {text = "MIT"}
-keywords = ["nse", "bhavcopy", "pro", "library", "finance", "stock", "jugaad", "data", "aynse"]
+license = {text = "*CMIT"}
+keywords = ["nse", "bhavcopy", "aynse"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Programming Language :: Python :: 3",

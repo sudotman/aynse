@@ -1,11 +1,13 @@
 name: Upload Python Package
 
 on:
-  workflow_run:
-    workflows: ["run-tests"]
-    types: [ completed ]
-    branches: [ master ]
-
+  # workflow_run:
+  #   workflows: ["run-tests"]
+  #   types: [ completed ]
+  #   branches: [ master ]
+  release:
+    types: [published]
+    
   workflow_dispatch:
     inputs:
       logLevel:
