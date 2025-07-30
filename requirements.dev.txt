@@ -7,3 +7,4 @@ pyfakefs
 pandas
 jupyterlab
 twine
+lxml>=4.0.0
