@@ -3,10 +3,8 @@ name: Upload Python Package
 on:
   workflow_run:
     workflows: ["run-tests"]
-    types:
-      - completed
-    branches:
-      - master
+    types: [ completed ]
+    branches: [ master ]
 
 jobs:
   deploy:
@@ -22,42 +20,31 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
-          cache: "pip"
+          cache: pip
           cache-dependency-path: pyproject.toml
 
-      # ────────────────────────────────────────────────────────────────────────────
-      # 1) Install & upgrade all build‐time tools so setuptools>=61 (PEP‑621) is used
-      - name: Upgrade pip and install build tools
+      - name: Upgrade pip & install build tools
         run: |
           python -m pip install --upgrade pip
           pip install --upgrade setuptools wheel build twine
 
-      # ────────────────────────────────────────────────────────────────────────────
-      # 2) Build both sdist and wheel explicitly
       - name: Build distributions
         run: python -m build --sdist --wheel
 
-      # ────────────────────────────────────────────────────────────────────────────
-      # 3) (Optional, but highly recommended) Dump out the first lines of METADATA
-      #    so you can see Name: and Version: in the Actions log
       - name: Inspect wheel METADATA
         run: |
-          echo ">>> METADATA for your wheel:"
-          unzip -p dist/aynse-*py3-none-any.whl '*.dist-info/METADATA' | head -n 20
-          echo ">>> End METADATA"
+          echo ">>> METADATA in dist/aynse-*.whl:"
+          unzip -p dist/aynse-*py3-none-any.whl '*.dist-info/METADATA' | head -20
+          echo ">>> end METADATA"
 
-      # ────────────────────────────────────────────────────────────────────────────
-      # 4) Verify before upload
-      - name: Check distributions
+      - name: Verify distributions
         run: twine check dist/*
 
-      # ────────────────────────────────────────────────────────────────────────────
-      # 5) Publish to PyPI via the pypa Action (it picks up PYPI_API_TOKEN for you)
-      - name: Publish
-        uses: pypa/gh-action-pypi-publish@v1.8.10
-        with:
-          user: __token__
-          password: ${{ secrets.PYPI_API_TOKEN }}
+      - name: Publish to PyPI
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: python -m twine upload dist/*
 
       - name: Dump GitHub context
         env:
