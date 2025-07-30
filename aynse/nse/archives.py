@@ -11,6 +11,8 @@ import requests
 import pprint
 import json
 import gzip
+import pandas as pd
+from io import StringIO
 def unzip(function):
     
     def unzipper(*args, **kwargs):
@@ -179,12 +181,16 @@ class NSEArchives:
             raise Exception("Failed to process API response.")
 
 
-    def bhavcopy_raw(self, dt):
+    def bhavcopy_raw(self, dt, as_dataframe=False):
         """Downloads raw bhavcopy text for a specific date
-        
+
         Uses new NSE API endpoints with date-based format switching.
         - Before July 8, 2024: Uses old CSV format API
         - After July 8, 2024: Uses new ZIP format API with different structure
+
+        Args:
+            dt (date): Date for bhavcopy
+            as_dataframe (bool): If True, returns a pandas DataFrame. If False, returns CSV text.
         """
         if dt < self.cutoff_date:
             response = self._get_old_bhavcopy(dt)
@@ -192,21 +198,15 @@ class NSEArchives:
             response = self._get_new_bhavcopy(dt)
         
         if response.status_code != 200:
-            # For file not found, NSE might return 404 or other error codes
-            # with a specific message.
             if "file not available" in response.text.lower():
-                 raise FileNotFoundError(f"Bhavcopy not available for {dt.strftime('%d-%m-%Y')}")
+                raise FileNotFoundError(f"Bhavcopy not available for {dt.strftime('%d-%m-%Y')}")
             raise Exception(f"API request failed with status code {response.status_code}: {response.text}")
 
         try:
             file_content = self._handle_bhavcopy_response(response)
-            
-            # Both formats return ZIP files containing CSV data, sometimes nested.
             fp = io.BytesIO(file_content)
             with zipfile.ZipFile(file=fp) as zf:
-                # Check for nested zip files first
                 nested_zip_files = [f for f in zf.namelist() if f.lower().endswith('.zip')]
-                
                 if nested_zip_files:
                     nested_zip_filename = nested_zip_files[0]
                     with zf.open(nested_zip_filename) as nested_zip_file:
@@ -216,19 +216,19 @@ class NSEArchives:
                             csv_files = [f for f in nested_zf.namelist() if f.lower().endswith('.csv')]
                             if not csv_files:
                                 raise Exception("No CSV file found in nested ZIP archive")
-                            
                             fname = csv_files[0]
                             with nested_zf.open(fname) as fp_bh:
-                                return fp_bh.read().decode('utf-8')
-                
-                # If no nested zip, look for a CSV file directly
-                csv_files = [f for f in zf.namelist() if f.lower().endswith('.csv')]
-                if not csv_files:
-                    raise Exception("No CSV or nested ZIP file found in the archive.")
-                    
-                fname = csv_files[0]
-                with zf.open(fname) as fp_bh:
-                    return fp_bh.read().decode('utf-8')
+                                csv_text = fp_bh.read().decode('utf-8')
+                else:
+                    csv_files = [f for f in zf.namelist() if f.lower().endswith('.csv')]
+                    if not csv_files:
+                        raise Exception("No CSV or nested ZIP file found in the archive.")
+                    fname = csv_files[0]
+                    with zf.open(fname) as fp_bh:
+                        csv_text = fp_bh.read().decode('utf-8')
+            if as_dataframe:
+                return pd.read_csv(StringIO(csv_text))
+            return csv_text
         except Exception as e:
             raise Exception(f"Error processing bhavcopy data for {dt.strftime('%d-%m-%Y')}: {str(e)}")
     def bhavcopy_save(self, dt, dest, skip_if_present=True):
