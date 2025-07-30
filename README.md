@@ -1,6 +1,6 @@
 # `aynse`
 
-[![build status](https://github.com/a-y-n/aynse/actions/workflows/run-tests.yml/badge.svg)](https://github.com/a-y-n/aynse/actions/workflows/run-tests.yml)
+[![build status](https://github.com/sudotman/aynse/actions/workflows/run-tests.yml/badge.svg)](https://github.com/sudotman/aynse/actions/workflows/run-tests.yml)
 [![PyPI version](https://badge.fury.io/py/aynse.svg)](https://badge.fury.io/py/aynse)
 [![license: mit](https://img.shields.io/badge/license-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
