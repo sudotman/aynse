@@ -2,7 +2,7 @@ from datetime import date
 from aynse import nse
 from aynse.nse import expiry_dates
 
-expiries = expiry_dates(date(2025, 4, 16), "RELIANCE")
+expiries = expiry_dates(date(2024, 4, 16), "RELIANCE")
 print(expiries)
 
 

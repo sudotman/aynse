@@ -206,5 +206,21 @@ class TestIndexHistory(TestCase):
 def test_expiry_dates():
     dt = date(2020,1,1)
     expiry_dts = nse.expiry_dates(dt, "FUTIDX", "NIFTY")
+    
+    # Test that we get a list of dates
+    assert isinstance(expiry_dts, list)
+    assert len(expiry_dts) > 0
+    
+    # Test that all items are date objects
+    for expiry in expiry_dts:
+        assert isinstance(expiry, date)
+        
+    # Test that dates are in the future relative to input date
+    for expiry in expiry_dts:
+        assert expiry >= dt
+        
+    # Test that for NIFTY we get weekly expiries (should be multiple per month)
+    # NIFTY should have weekly expiries, so we should get several dates
+    assert len(expiry_dts) >= 3
 
 

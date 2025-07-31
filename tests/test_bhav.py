@@ -65,16 +65,31 @@ def test_bhavcopy_fo():
 
 def test_expiry_dates():
     dt = date(2020, 9, 28)
-    dts = expiry_dates(dt)
+    
+    # Test NIFTY weekly expiries (should include weekly dates)
+    dts = expiry_dates(dt, "OPTIDX", "NIFTY")
     assert date(2020, 10, 1) in dts
     assert date(2020, 10, 8) in dts
+    
+    # Test with specific parameters
     dts = expiry_dates(dt, "OPTIDX", "NIFTY", 10000)
     assert date(2020, 10, 1) in dts
     assert date(2020, 10, 8) in dts
+    
+    # Test NIFTY futures (weekly expiries, should have 3+ expiries in near term)
     dts = expiry_dates(dt, "FUTIDX", "NIFTY")
-    assert len(dts) == 3
+    assert len(dts) >= 3
+    assert date(2020, 10, 1) in dts
+    assert date(2020, 10, 8) in dts
+    
+    # Test RELIANCE futures (monthly expiries, should have 3+ monthly expiries)
     dts = expiry_dates(dt, "FUTSTK", "RELIANCE")
-    assert len(dts) == 3
+    assert len(dts) >= 3
+    # Monthly expiries for RELIANCE should include end-of-month dates
+    assert date(2020, 10, 29) in dts
+    assert date(2020, 11, 26) in dts
+    
+    # Test RELIANCE options (monthly expiries)
     dts = expiry_dates(dt, "OPTSTK", "RELIANCE")
     assert date(2020, 10, 29) in dts
     assert date(2020, 11, 26) in dts
