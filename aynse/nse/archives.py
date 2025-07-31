@@ -552,23 +552,152 @@ index_constituent_save = ic.index_constituent_save
 index_constituent_save_all = ic.index_constituent_save_all
 
 
-def expiry_dates(dt, instrument_type="", symbol="", contracts=0):
-    txt = bhavcopy_fo_raw(dt)
-    rows = txt.split("\n")
-    rows.pop(0) # Remove headers
-    if len(rows[-1].split(',')) <= 10:
-        rows.pop(-1) # Remove last blank row
-    cells = [row.split(',') for row in rows]
-    if instrument_type:
-        cells = filter(lambda x: x[0]==instrument_type, cells)
-    if symbol:
-        cells = filter(lambda x: x[1] == symbol, cells)
+def expiry_dates(dt, instrument_type="", symbol="", contracts=0, months_ahead=6):
+    """
+    Algorithmically calculate expiry dates based on NSE rules.
     
-    cells = filter(lambda x: int(x[10])>contracts, cells)
+    Args:
+        dt: Reference date for calculation
+        instrument_type: Type of derivative instrument (e.g., "FUTIDX", "OPTIDX", "FUTSTK", "OPTSTK")
+        symbol: Symbol name (used to determine contract cycle)
+        contracts: Minimum open interest filter (deprecated in algorithmic approach)
+        months_ahead: Number of months ahead to calculate expiries for
+        
+    Returns:
+        List of expiry dates
+    """
+    from ..holidays import holidays
+    import calendar
     
-    dts_txt = [row[2] for row in cells]
-    dts = [datetime.strptime(d, "%d-%b-%Y").date() for d in dts_txt]
-    return list(set(dts))
+    def is_trading_day(date_obj):
+        """Check if a date is a trading day (not weekend or holiday)"""
+        # Skip weekends
+        if date_obj.weekday() >= 5:  # Saturday=5, Sunday=6
+            return False
+        # Skip holidays
+        year_holidays = holidays(year=date_obj.year)
+        return date_obj not in year_holidays
+    
+    def get_expiry_weekday(trade_date):
+        """Determine expiry weekday based on NSE policy calendar"""
+        # Policy transition dates
+        thursday_cutoff = date(2025, 4, 4)
+        monday_cutoff = date(2025, 8, 29)
+        
+        if trade_date < thursday_cutoff:
+            return 3  # Thursday (0=Monday, 1=Tuesday, ..., 6=Sunday)
+        elif trade_date < monday_cutoff:
+            return 0  # Monday
+        else:
+            return 1  # Tuesday
+    
+    def adjust_for_trading_day(candidate_date):
+        """Adjust date to previous trading day if not a trading day"""
+        while not is_trading_day(candidate_date):
+            candidate_date = date(candidate_date.year, candidate_date.month, candidate_date.day - 1)
+        return candidate_date
+    
+    def get_monthly_expiry(year, month, expiry_weekday):
+        """Get the last occurrence of expiry_weekday in the given month"""
+        # Get last day of month
+        last_day = calendar.monthrange(year, month)[1]
+        last_date = date(year, month, last_day)
+        
+        # Find the last occurrence of the target weekday
+        days_back = (last_date.weekday() - expiry_weekday) % 7
+        candidate = date(year, month, last_day - days_back)
+        
+        return adjust_for_trading_day(candidate)
+    
+    def get_weekly_expiry(year, month, week_number, expiry_weekday):
+        """Get weekly expiry for a specific week in the month"""
+        from datetime import timedelta
+        
+        # Find first occurrence of expiry_weekday in the month
+        first_day = date(year, month, 1)
+        days_ahead = (expiry_weekday - first_day.weekday()) % 7
+        first_occurrence = first_day + timedelta(days=days_ahead)
+        
+        # Add weeks to get to the target week
+        target_date = first_occurrence + timedelta(weeks=(week_number - 1))
+        
+        # Make sure we're still in the same month
+        if target_date.month != month:
+            return None
+            
+        return adjust_for_trading_day(target_date)
+    
+    def determine_contract_cycle(instrument_type, symbol):
+        """Determine if symbol has weekly, monthly, quarterly, or half-yearly expiries"""
+        # Major indices typically have weekly expiries
+        weekly_symbols = ['NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY']
+        
+        # Bank Nifty and Nifty have weekly expiries
+        if any(weekly_symbol in (symbol or '').upper() for weekly_symbol in weekly_symbols):
+            return 'weekly'
+        
+        # Some special contracts might have quarterly expiries (Mar, Jun, Sep, Dec)
+        quarterly_symbols = []  # Add symbols that have quarterly expiries if needed
+        if symbol and symbol.upper() in quarterly_symbols:
+            return 'quarterly'
+        
+        # Some contracts might have half-yearly expiries (Jun, Dec)
+        half_yearly_symbols = []  # Add symbols that have half-yearly expiries if needed
+        if symbol and symbol.upper() in half_yearly_symbols:
+            return 'half_yearly'
+        
+        # Most stocks have monthly expiries
+        if instrument_type and ('STK' in instrument_type.upper()):
+            return 'monthly'
+            
+        # Default to monthly for unknown cases
+        return 'monthly'
+    
+    expiry_weekday = get_expiry_weekday(dt)
+    contract_cycle = determine_contract_cycle(instrument_type, symbol)
+    expiries = []
+    
+    # Generate expiries for the specified months ahead
+    current_month = dt.month
+    current_year = dt.year
+    
+    for i in range(months_ahead):
+        target_month = current_month + i
+        target_year = current_year
+        
+        # Handle year rollover
+        while target_month > 12:
+            target_month -= 12
+            target_year += 1
+        
+        if contract_cycle == 'weekly':
+            # Generate weekly expiries for the month
+            for week in range(1, 6):  # Up to 5 weeks in a month
+                weekly_expiry = get_weekly_expiry(target_year, target_month, week, expiry_weekday)
+                if weekly_expiry and weekly_expiry >= dt:
+                    expiries.append(weekly_expiry)
+        elif contract_cycle == 'quarterly':
+            # Quarterly expiries (March, June, September, December)
+            if target_month in [3, 6, 9, 12]:
+                quarterly_expiry = get_monthly_expiry(target_year, target_month, expiry_weekday)
+                if quarterly_expiry >= dt:
+                    expiries.append(quarterly_expiry)
+        elif contract_cycle == 'half_yearly':
+            # Half-yearly expiries (June, December)
+            if target_month in [6, 12]:
+                half_yearly_expiry = get_monthly_expiry(target_year, target_month, expiry_weekday)
+                if half_yearly_expiry >= dt:
+                    expiries.append(half_yearly_expiry)
+        else:
+            # Monthly expiry (last occurrence of expiry weekday in month)
+            monthly_expiry = get_monthly_expiry(target_year, target_month, expiry_weekday)
+            if monthly_expiry >= dt:
+                expiries.append(monthly_expiry)
+    
+    # Sort and remove duplicates
+    expiries = sorted(list(set(expiries)))
+    
+    return expiries
 
 
 
