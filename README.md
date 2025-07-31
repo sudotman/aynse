@@ -2,7 +2,7 @@
 
 [![build status](https://github.com/sudotman/aynse/actions/workflows/run-tests.yml/badge.svg)](https://github.com/sudotman/aynse/actions/workflows/run-tests.yml)
 [![PyPI version](https://badge.fury.io/py/aynse.svg)](https://badge.fury.io/py/aynse)
-[![license: CMIT](https://img.shields.io/badge/license-*CMIT-black.svg)](https://opensource.org/licenses/MIT)
+[![license: CMIT](https://img.shields.io/badge/license-*CMIT-black.svg)](LICENSE.md)
 [![misc badge](https://img.shields.io/badge/ayn-nse-black)](https://en.wikipedia.org/wiki/Ayn_Rand)
 
 `aynse` is a lean, modern python library for fetching data from the national stock exchange (NSE) of india. it is a fork of the unmaintained `jugaad-data` library, aiming to provide a robust and regularly updated tool for financial data analysis. 
@@ -119,4 +119,4 @@ contributions are welcome! if you find a bug or have a feature request, please o
 
 ## license
 
-this project has a (custom) MIT* license but extends limitations. if you're a agency/corporate with >2 employees alongside of you, you cannot wrap this project or use it without prior written permission from me. if you're an individual, you can use it freely for personal projects. this project is not intended for commercial use without prior permission. if caught using this project in violation of the license, it may result in automated reporting and/or legal action. please see the [license file](LICENSE) for more details.
+this project has a (custom) MIT* license but extends limitations. if you're a agency/corporate with >2 employees alongside of you, you cannot wrap this project or use it without prior written permission from me. if you're an individual, you can use it freely for personal projects. this project is not intended for commercial use without prior permission. if caught using this project in violation of the license, it may result in automated reporting and/or legal action. please see the [license file](LICENSE.md) for more details.
