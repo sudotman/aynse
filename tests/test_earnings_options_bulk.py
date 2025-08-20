@@ -91,7 +91,7 @@ class TestEarningsOptionsBulk:
             cls.earnings_calendar[stock] = cls.earnings_calendar['ICICIBANK']  # Use similar dates for now
     
     def get_next_expiry_after_date(self, target_date):
-        """Get the next monthly expiry date after the target date"""
+        """Get the next monthly expiry date after the target date with enhanced error handling"""
         try:
             # Get current year's expiry dates
             year = target_date.year
@@ -100,40 +100,76 @@ class TestEarningsOptionsBulk:
             # Call expiry_dates with proper date object (not int)
             expiries = expiry_dates(year_start_date)
             
+            # Validate that we got a list of dates
+            if not expiries or not isinstance(expiries, list):
+                raise ValueError(f"Invalid expiries returned: {expiries}")
+            
             # Find next expiry after target date
             for expiry_date in expiries:
+                if not isinstance(expiry_date, date):
+                    continue  # Skip invalid entries
                 if expiry_date > target_date:
                     return expiry_date
             
             # If no expiry found in current year, get from next year
             next_year_start_date = date(year + 1, 1, 1)
             next_year_expiries = expiry_dates(next_year_start_date)
-            return next_year_expiries[0] if next_year_expiries else None
+            
+            if next_year_expiries and isinstance(next_year_expiries, list) and len(next_year_expiries) > 0:
+                for expiry in next_year_expiries:
+                    if isinstance(expiry, date):
+                        return expiry
+            
+            # If still no valid expiry found, fall through to fallback
+            raise ValueError("No valid expiry dates found")
             
         except Exception as e:
             print(f"Error in expiry_dates function for {target_date}: {e}")
             # Use robust fallback calculation for last Thursday of month
             try:
-                # Move to the month after target date
-                if target_date.month == 12:
-                    next_month_first = target_date.replace(year=target_date.year + 1, month=1, day=1)
-                else:
-                    next_month_first = target_date.replace(month=target_date.month + 1, day=1)
-                
-                # Find last day of target month
-                last_day_of_month = next_month_first - timedelta(days=1)
-                
-                # Find last Thursday of the month
-                # Thursday is weekday 3 (Monday=0, Tuesday=1, Wednesday=2, Thursday=3)
-                days_back = (last_day_of_month.weekday() - 3) % 7
-                last_thursday = last_day_of_month - timedelta(days=days_back)
-                
-                return last_thursday
+                return self._calculate_next_monthly_expiry_fallback(target_date)
                 
             except Exception as fallback_error:
                 print(f"Fallback calculation also failed for {target_date}: {fallback_error}")
                 # Final fallback: just add 30 days
                 return target_date + timedelta(days=30)
+    
+    def _calculate_next_monthly_expiry_fallback(self, target_date):
+        """Fallback calculation for monthly expiry (last Thursday of month)"""
+        # Find next month's last Thursday
+        current_month = target_date.month
+        current_year = target_date.year
+        
+        # Start with the current month and find next expiry
+        for month_offset in range(3):  # Check current month and next 2 months
+            test_month = current_month + month_offset
+            test_year = current_year
+            
+            # Handle year rollover
+            while test_month > 12:
+                test_month -= 12
+                test_year += 1
+            
+            # Find last Thursday of this month
+            # Get last day of month
+            if test_month == 12:
+                next_month_first = date(test_year + 1, 1, 1)
+            else:
+                next_month_first = date(test_year, test_month + 1, 1)
+            
+            last_day_of_month = next_month_first - timedelta(days=1)
+            
+            # Find last Thursday of the month
+            # Thursday is weekday 3 (Monday=0, Tuesday=1, Wednesday=2, Thursday=3)
+            days_back = (last_day_of_month.weekday() - 3) % 7
+            last_thursday = last_day_of_month - timedelta(days=days_back)
+            
+            # Return first Thursday that's after target date
+            if last_thursday > target_date:
+                return last_thursday
+        
+        # Final fallback if nothing found
+        return target_date + timedelta(days=30)
     
     def test_live_options_data_availability(self):
         """Test current live options data availability for test stocks"""
@@ -438,45 +474,54 @@ class TestEarningsOptionsBulk:
                 'success': False,
                 'error': str(e)
             })
-            return workflow_results
+            # Continue with test but skip historical data step since no expiry
+            expiry_date = None
         
         # Step 3: Test historical data around earnings
-        try:
-            print("Step 3: Testing historical options data...")
-            test_date = earnings_date + timedelta(days=1)
-            
-            # Test a sample strike
-            hist_data = derivatives_raw(
-                symbol=stock,
-                from_date=test_date,
-                to_date=test_date,
-                expiry_date=expiry_date,
-                instrument_type='OPTSTK',
-                strike_price=2900,
-                option_type='CE'
-            )
-            
-            if hist_data:
-                print(f"✅ Found {len(hist_data)} historical records")
-                workflow_results['steps'].append({
-                    'step': 'historical_data',
-                    'success': True,
-                    'records': len(hist_data)
-                })
-            else:
-                print("⚠️  No historical data found (may be expected)")
+        if expiry_date is not None:
+            try:
+                print("Step 3: Testing historical options data...")
+                test_date = earnings_date + timedelta(days=1)
+                
+                # Test a sample strike
+                hist_data = derivatives_raw(
+                    symbol=stock,
+                    from_date=test_date,
+                    to_date=test_date,
+                    expiry_date=expiry_date,
+                    instrument_type='OPTSTK',
+                    strike_price=2900,
+                    option_type='CE'
+                )
+                
+                if hist_data:
+                    print(f"✅ Found {len(hist_data)} historical records")
+                    workflow_results['steps'].append({
+                        'step': 'historical_data',
+                        'success': True,
+                        'records': len(hist_data)
+                    })
+                else:
+                    print("⚠️  No historical data found (may be expected)")
+                    workflow_results['steps'].append({
+                        'step': 'historical_data',
+                        'success': False,
+                        'error': 'No historical data available'
+                    })
+                    
+            except Exception as e:
+                print(f"❌ Error fetching historical data: {e}")
                 workflow_results['steps'].append({
                     'step': 'historical_data',
                     'success': False,
-                    'error': 'No historical data available'
+                    'error': str(e)
                 })
-                
-        except Exception as e:
-            print(f"❌ Error fetching historical data: {e}")
+        else:
+            print("Step 3: Skipping historical data test (no expiry date available)")
             workflow_results['steps'].append({
                 'step': 'historical_data',
                 'success': False,
-                'error': str(e)
+                'error': 'No expiry date available'
             })
         
         print(f"\nWorkflow Results for {stock}:")
