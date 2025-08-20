@@ -117,6 +117,133 @@ class NSEHistory:
         params = [(symbol, x[0], x[1], expiry_date, instrument_type, strike_price, option_type) for x in reversed(date_ranges)]
         chunks = ut.pool(self._derivatives, params, max_workers=self.workers)
         return list(itertools.chain.from_iterable(chunks))
+    
+    def bulk_derivatives_raw(self, requests_list, max_workers=None):
+        """
+        Fetch historical derivatives data for multiple requests concurrently.
+        
+        Args:
+            requests_list (list): List of dictionaries, each containing:
+                - symbol: str
+                - from_date: date
+                - to_date: date  
+                - expiry_date: date
+                - instrument_type: str ('OPTSTK', 'OPTIDX', 'FUTSTK', 'FUTIDX')
+                - strike_price: float (for options)
+                - option_type: str (for options, 'CE' or 'PE')
+            max_workers (int): Maximum concurrent requests (default: self.workers)
+            
+        Returns:
+            list: List of results, each containing request info and data/error
+        """
+        if max_workers is None:
+            max_workers = self.workers
+        
+        def fetch_single_derivative(request):
+            try:
+                data = self.derivatives_raw(
+                    symbol=request['symbol'],
+                    from_date=request['from_date'],
+                    to_date=request['to_date'],
+                    expiry_date=request['expiry_date'],
+                    instrument_type=request['instrument_type'],
+                    strike_price=request.get('strike_price'),
+                    option_type=request.get('option_type')
+                )
+                return {
+                    'request': request,
+                    'data': data,
+                    'success': True,
+                    'error': None,
+                    'record_count': len(data) if data else 0
+                }
+            except Exception as e:
+                return {
+                    'request': request,
+                    'data': None,
+                    'success': False,
+                    'error': str(e),
+                    'record_count': 0
+                }
+        
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        
+        results = []
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_request = {executor.submit(fetch_single_derivative, req): req 
+                               for req in requests_list}
+            
+            for future in as_completed(future_to_request):
+                result = future.result()
+                results.append(result)
+        
+        return results
+    
+    def get_earnings_options_historical(self, symbol, earnings_date, expiry_date, 
+                                      strike_prices, days_around=7):
+        """
+        Get historical options data around an earnings date for multiple strikes.
+        
+        Args:
+            symbol (str): Stock symbol
+            earnings_date (date): Date of earnings announcement
+            expiry_date (date): Options expiry date
+            strike_prices (list): List of strike prices to fetch
+            days_around (int): Days before/after earnings to fetch data
+            
+        Returns:
+            dict: Historical options data organized by strike and type
+        """
+        from datetime import timedelta
+        
+        start_date = earnings_date - timedelta(days=days_around)
+        end_date = earnings_date + timedelta(days=days_around)
+        
+        # Build request list for all strikes and option types
+        requests = []
+        for strike in strike_prices:
+            for option_type in ['CE', 'PE']:
+                requests.append({
+                    'symbol': symbol,
+                    'from_date': start_date,
+                    'to_date': end_date,
+                    'expiry_date': expiry_date,
+                    'instrument_type': 'OPTSTK',
+                    'strike_price': strike,
+                    'option_type': option_type
+                })
+        
+        # Fetch all data concurrently
+        results = self.bulk_derivatives_raw(requests)
+        
+        # Organize results by strike and option type
+        organized_data = {}
+        for result in results:
+            req = result['request']
+            key = f"{req['strike_price']}_{req['option_type']}"
+            organized_data[key] = {
+                'strike_price': req['strike_price'],
+                'option_type': req['option_type'],
+                'data': result['data'],
+                'success': result['success'],
+                'error': result['error'],
+                'record_count': result['record_count']
+            }
+        
+        return {
+            'symbol': symbol,
+            'earnings_date': earnings_date,
+            'expiry_date': expiry_date,
+            'date_range': (start_date, end_date),
+            'strikes': strike_prices,
+            'results': organized_data,
+            'summary': {
+                'total_requests': len(requests),
+                'successful': sum(1 for r in results if r['success']),
+                'failed': sum(1 for r in results if not r['success']),
+                'total_records': sum(r['record_count'] for r in results)
+            }
+        }
 
        
 
