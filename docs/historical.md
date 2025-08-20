@@ -16,6 +16,25 @@ bhavcopy_index_save(date(2024, 1, 1), "/path/to/directory")
 
 > **Note:** The difference between `bhavcopy_save` and `full_bhavcopy_save` is that the full bhavcopy also includes the percentage of volume that was for delivery.
 
+## Download Bulk Deals Data
+
+Download bulk deals data for specific date ranges using the new bulk deals API.
+
+```python
+from datetime import date
+from aynse.nse import bulk_deals_raw, bulk_deals_save
+
+# Download bulk deals data as JSON for a date range
+bulk_data = bulk_deals_raw(from_date=date(2024, 7, 1), 
+                          to_date=date(2024, 7, 31))
+print(f"Found {len(bulk_data['data'])} bulk deals")
+
+# Save bulk deals data to a JSON file
+bulk_deals_save(from_date=date(2024, 7, 1), 
+               to_date=date(2024, 7, 31), 
+               dest="/path/to/directory")
+```
+
 ## Download Historical Stock Data
 
 ```python
@@ -35,7 +54,7 @@ stock_csv(symbol="RELIANCE", from_date=date(2024, 1, 1),
 ## Download Historical Index Data
 
 ```python
-from aynse.nse import index_csv, index_df
+from aynse.nse import index_csv, index_df, index_pe_df
 
 # Download as pandas dataframe
 df = index_df(symbol="NIFTY 50", from_date=date(2024, 1, 1),
@@ -45,6 +64,11 @@ print(df.head())
 # Download as a CSV file
 index_csv(symbol="NIFTY 50", from_date=date(2024, 1, 1),
           to_date=date(2024, 1, 31), output="/path/to/file.csv")
+
+# Download index P/E ratio data
+pe_df = index_pe_df(symbol="NIFTY 50", from_date=date(2024, 1, 1),
+                   to_date=date(2024, 1, 31))
+print(pe_df.head())
 ```
 
 ## Download Historical Derivatives Data
@@ -133,4 +157,76 @@ df = derivatives_df(symbol="NIFTY", from_date=date(2024, 1, 1), to_date=date(202
                     expiry_date=date(2024, 1, 25), instrument_type="OPTIDX", 
                     option_type="CE", strike_price=21000)
 print(df.head())
+```
+
+## Bulk Derivatives Operations
+
+For advanced users who need to fetch data for multiple derivatives contracts concurrently, `aynse` provides bulk fetching capabilities through the `NSEHistory` class.
+
+### Bulk Historical Derivatives Data
+
+```python
+from datetime import date
+from aynse.nse.history import NSEHistory
+
+# Create NSEHistory instance
+nse_history = NSEHistory()
+
+# Define multiple derivatives requests
+requests_list = [
+    {
+        'symbol': 'RELIANCE',
+        'from_date': date(2024, 1, 1),
+        'to_date': date(2024, 1, 31),
+        'expiry_date': date(2024, 1, 25),
+        'instrument_type': 'FUTSTK'
+    },
+    {
+        'symbol': 'TCS',
+        'from_date': date(2024, 1, 1), 
+        'to_date': date(2024, 1, 31),
+        'expiry_date': date(2024, 1, 25),
+        'instrument_type': 'FUTSTK'
+    },
+    {
+        'symbol': 'NIFTY',
+        'from_date': date(2024, 1, 1),
+        'to_date': date(2024, 1, 31), 
+        'expiry_date': date(2024, 1, 25),
+        'instrument_type': 'FUTIDX'
+    }
+]
+
+# Fetch all contracts concurrently
+bulk_results = nse_history.bulk_derivatives_raw(requests_list, max_workers=3)
+
+# Process results
+for result in bulk_results:
+    if 'error' in result:
+        print(f"Error for {result['request']['symbol']}: {result['error']}")
+    else:
+        print(f"Downloaded {len(result['data'])} records for {result['request']['symbol']}")
+```
+
+### Historical Options Analysis Around Earnings
+
+```python
+from datetime import date
+from aynse.nse.history import NSEHistory
+
+# Create NSEHistory instance
+nse_history = NSEHistory()
+
+# Analyze options around earnings announcement
+earnings_analysis = nse_history.get_earnings_options_historical(
+    symbol='RELIANCE',
+    earnings_date=date(2024, 1, 19),
+    expiry_date=date(2024, 1, 25),
+    strike_prices=[2800, 2850, 2900, 2950, 3000],  # List of strike prices
+    days_around=7  # Days before/after earnings
+)
+
+print(f"Analyzed {len(earnings_analysis)} strike prices")
+for strike, data in earnings_analysis.items():
+    print(f"Strike {strike}: {len(data['CE'])} CE records, {len(data['PE'])} PE records")
 ```

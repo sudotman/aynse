@@ -12,7 +12,10 @@
 -   **historical data:** fetch historical stock and index data.
 -   **derivatives data:** download futures and options data.
 -   **bhavcopy:** download daily bhavcopy reports for equity, f&o, and indices.
+-   **bulk deals:** download bulk deals data for date ranges.
 -   **live market data:** get real-time stock quotes.
+-   **bulk options analysis:** concurrent fetching of option chains for multiple stocks.
+-   **earnings analysis:** specialized tools for analyzing options around earnings dates.
 -   **holiday information:** retrieve a list of trading holidays for a given year.
 -   **command-line interface:** a simple cli for quick data downloads.
 -   **pandas integration:** returns data as pandas dataframes for easy analysis.
@@ -89,6 +92,68 @@ from aynse.holidays import holidays
 # get trading holidays for the year 2024
 trading_holidays = holidays(2024)
 print(trading_holidays)
+```
+
+### download bulk deals
+
+download bulk deals data for a date range.
+
+```python
+from datetime import date
+from aynse.nse import bulk_deals_raw, bulk_deals_save
+
+# download bulk deals data as json for a date range
+bulk_data = bulk_deals_raw(from_date=date(2024, 7, 1), 
+                          to_date=date(2024, 7, 31))
+print(bulk_data['data'])
+
+# save bulk deals data to a json file
+bulk_deals_save(from_date=date(2024, 7, 1), 
+               to_date=date(2024, 7, 31), 
+               dest="tmp")
+```
+
+### bulk options analysis
+
+analyze option chains for multiple stocks concurrently.
+
+```python
+from aynse.nse import NSELive
+
+n = NSELive()
+
+# fetch option chains for multiple stocks at once
+symbols = ['RELIANCE', 'TCS', 'HDFCBANK']
+bulk_options = n.bulk_equities_option_chain(symbols, max_workers=3)
+
+for symbol in bulk_options['success']:
+    print(f"{symbol}: {len(bulk_options['success'][symbol]['records']['data'])} contracts")
+```
+
+### earnings options analysis
+
+analyze options around earnings dates for investment insights.
+
+```python
+from datetime import date
+from aynse.nse import NSELive
+
+n = NSELive()
+
+# analyze options around a specific date (e.g., earnings)
+earnings_analysis = n.get_options_around_date('RELIANCE', 
+                                             target_date=date(2024, 1, 19), 
+                                             days_before=5, 
+                                             days_after=5)
+print(f"Relevant expiries: {earnings_analysis['relevant_expiries']}")
+
+# bulk analyze multiple stocks and their earnings dates
+symbols_and_dates = [
+    ('RELIANCE', date(2024, 1, 19)),
+    ('TCS', date(2024, 1, 11)),
+    ('HDFCBANK', date(2024, 1, 20))
+]
+earnings_bulk = n.analyze_earnings_options(symbols_and_dates, max_workers=3)
 ```
 
 ## command-line interface
