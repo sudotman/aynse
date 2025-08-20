@@ -154,7 +154,8 @@ class EarningsOptionsBulkAnalysis:
             from aynse.nse.archives import expiry_dates
             
             year = target_date.year
-            expiries = expiry_dates(year)
+            year_start_date = date(year, 1, 1)
+            expiries = expiry_dates(year_start_date)
             
             # Find next expiry after target
             for expiry in expiries:
@@ -162,7 +163,8 @@ class EarningsOptionsBulkAnalysis:
                     return expiry
             
             # If no expiry in current year, get from next year
-            next_year_expiries = expiry_dates(year + 1)
+            next_year_start_date = date(year + 1, 1, 1)
+            next_year_expiries = expiry_dates(next_year_start_date)
             return next_year_expiries[0] if next_year_expiries else None
             
         except Exception as e:

@@ -95,7 +95,8 @@ class TestEarningsOptionsBulk:
         try:
             # Get current year's expiry dates
             year = target_date.year
-            expiries = expiry_dates(year)
+            year_start_date = date(year, 1, 1)
+            expiries = expiry_dates(year_start_date)
             
             # Find next expiry after target date
             for expiry_date in expiries:
@@ -103,7 +104,8 @@ class TestEarningsOptionsBulk:
                     return expiry_date
             
             # If no expiry found in current year, get from next year
-            next_year_expiries = expiry_dates(year + 1)
+            next_year_start_date = date(year + 1, 1, 1)
+            next_year_expiries = expiry_dates(next_year_start_date)
             return next_year_expiries[0] if next_year_expiries else None
             
         except Exception as e:
@@ -471,9 +473,11 @@ class TestEarningsOptionsBulk:
         
         total_earnings_dates = 0
         testable_dates = 0
+        stocks_tested = 0
         
         for stock, dates in self.earnings_calendar.items():
             if stock in self.test_stocks[:3]:  # Limit to avoid timeout
+                stocks_tested += 1
                 print(f"\n{stock}: {len(dates)} earnings dates from 2020-2024")
                 total_earnings_dates += len(dates)
                 
@@ -496,16 +500,17 @@ class TestEarningsOptionsBulk:
         print(f"\nCoverage Summary:")
         print(f"Total earnings dates: {total_earnings_dates}")
         print(f"Testable dates: {testable_dates}")
-        print(f"Average per stock: {testable_dates/len(self.test_stocks):.1f}")
+        print(f"Stocks tested: {stocks_tested}")
+        print(f"Average per stock: {testable_dates/stocks_tested:.1f}")
         
         # Should have reasonable coverage (~20 dates per stock over 5 years)
-        expected_min_dates = len(self.test_stocks) * 15  # At least 15 dates per stock
+        expected_min_dates = stocks_tested * 15  # At least 15 dates per stock
         assert testable_dates >= expected_min_dates, f"Insufficient earnings coverage: {testable_dates} < {expected_min_dates}"
         
         return {
             'total_dates': total_earnings_dates,
             'testable_dates': testable_dates,
-            'stocks_tested': len(self.test_stocks)
+            'stocks_tested': stocks_tested
         }
 
 
