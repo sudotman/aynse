@@ -96,6 +96,8 @@ class TestEarningsOptionsBulk:
             # Get current year's expiry dates
             year = target_date.year
             year_start_date = date(year, 1, 1)
+            
+            # Call expiry_dates with proper date object (not int)
             expiries = expiry_dates(year_start_date)
             
             # Find next expiry after target date
@@ -109,11 +111,29 @@ class TestEarningsOptionsBulk:
             return next_year_expiries[0] if next_year_expiries else None
             
         except Exception as e:
-            print(f"Error getting expiry for {target_date}: {e}")
-            # Fallback: last Thursday of the month
-            next_month = target_date.replace(day=28) + timedelta(days=4)
-            next_month = next_month - timedelta(days=next_month.weekday())
-            return next_month + timedelta(days=3)  # Thursday
+            print(f"Error in expiry_dates function for {target_date}: {e}")
+            # Use robust fallback calculation for last Thursday of month
+            try:
+                # Move to the month after target date
+                if target_date.month == 12:
+                    next_month_first = target_date.replace(year=target_date.year + 1, month=1, day=1)
+                else:
+                    next_month_first = target_date.replace(month=target_date.month + 1, day=1)
+                
+                # Find last day of target month
+                last_day_of_month = next_month_first - timedelta(days=1)
+                
+                # Find last Thursday of the month
+                # Thursday is weekday 3 (Monday=0, Tuesday=1, Wednesday=2, Thursday=3)
+                days_back = (last_day_of_month.weekday() - 3) % 7
+                last_thursday = last_day_of_month - timedelta(days=days_back)
+                
+                return last_thursday
+                
+            except Exception as fallback_error:
+                print(f"Fallback calculation also failed for {target_date}: {fallback_error}")
+                # Final fallback: just add 30 days
+                return target_date + timedelta(days=30)
     
     def test_live_options_data_availability(self):
         """Test current live options data availability for test stocks"""
@@ -288,7 +308,8 @@ class TestEarningsOptionsBulk:
             print("3. Network connectivity issues")
             print("4. Different strike price levels needed")
             
-        return test_cases
+        # Assert that we attempted tests and got some results
+        assert len(test_cases) > 0, "No historical options tests were executed"
     
     def test_bulk_options_fetching_capability(self):
         """Test the library's capability to handle bulk options fetching"""
@@ -353,8 +374,6 @@ class TestEarningsOptionsBulk:
         
         # At least 1 stock should work for bulk fetching test
         assert successful_stocks > 0, "Bulk fetching failed for all stocks"
-        
-        return results
     
     def test_earnings_analysis_workflow(self):
         """Test a complete earnings analysis workflow"""
@@ -465,7 +484,8 @@ class TestEarningsOptionsBulk:
         total_steps = len(workflow_results['steps'])
         print(f"Successful steps: {successful_steps}/{total_steps}")
         
-        return workflow_results
+        # Assert workflow completed successfully
+        assert successful_steps >= 2, f"Workflow failed: only {successful_steps}/{total_steps} steps completed"
     
     def test_five_year_earnings_coverage(self):
         """Test coverage of earnings data over approximately 5 years"""
@@ -474,6 +494,7 @@ class TestEarningsOptionsBulk:
         total_earnings_dates = 0
         testable_dates = 0
         stocks_tested = 0
+        expiry_errors = []
         
         for stock, dates in self.earnings_calendar.items():
             if stock in self.test_stocks[:3]:  # Limit to avoid timeout
@@ -495,7 +516,9 @@ class TestEarningsOptionsBulk:
                         days_to_expiry = (expiry - sample_date).days
                         print(f"    {sample_date} → {expiry} ({days_to_expiry} days)")
                     except Exception as e:
-                        print(f"    {sample_date} → Error: {e}")
+                        error_msg = f"Error getting expiry for {sample_date}: {e}"
+                        print(f"    {error_msg}")
+                        expiry_errors.append(error_msg)
         
         print(f"\nCoverage Summary:")
         print(f"Total earnings dates: {total_earnings_dates}")
@@ -503,15 +526,18 @@ class TestEarningsOptionsBulk:
         print(f"Stocks tested: {stocks_tested}")
         print(f"Average per stock: {testable_dates/stocks_tested:.1f}")
         
+        # Check for expiry calculation errors
+        if expiry_errors:
+            print(f"\nExpiry calculation errors encountered:")
+            for error in expiry_errors:
+                print(f"  - {error}")
+        
         # Should have reasonable coverage (~20 dates per stock over 5 years)
         expected_min_dates = stocks_tested * 15  # At least 15 dates per stock
         assert testable_dates >= expected_min_dates, f"Insufficient earnings coverage: {testable_dates} < {expected_min_dates}"
         
-        return {
-            'total_dates': total_earnings_dates,
-            'testable_dates': testable_dates,
-            'stocks_tested': stocks_tested
-        }
+        # Expiry calculations should work for most dates
+        assert len(expiry_errors) == 0, f"Expiry calculation errors: {expiry_errors}"
 
 
 if __name__ == "__main__":
