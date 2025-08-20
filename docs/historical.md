@@ -16,6 +16,24 @@ bhavcopy_index_save(date(2024, 1, 1), "/path/to/directory")
 
 > **Note:** The difference between `bhavcopy_save` and `full_bhavcopy_save` is that the full bhavcopy also includes the percentage of volume that was for delivery.
 
+## Download Index Constituents
+
+Download the constituent stocks of various NSE indices.
+
+```python
+from aynse.nse import index_constituent_save, index_constituent_save_all, index_constituent_raw
+
+# Download constituents for a specific index
+index_constituent_save("nifty50", "/path/to/directory")
+
+# Download raw constituents data as string
+raw_data = index_constituent_raw("nifty50")
+print(raw_data)
+
+# Download constituents for all available indices
+index_constituent_save_all("/path/to/directory")
+```
+
 ## Download Bulk Deals Data
 
 Download bulk deals data for specific date ranges using the new bulk deals API.
