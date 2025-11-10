@@ -11,16 +11,16 @@ while modernising the internals.
 Where to get it
 ---------------
 The source code is currently hosted on GitHub at:
-https://github.com/a-y-n/aynse
+https://github.com/sudotman/aynse
 
 Binary installers for the latest released version are available at the
 `Python package index`_
 
 .. _Python package index: https://pypi.org/project/aynse
 
-Detailed documentation: https://github.com/a-y-n/aynse
+Detailed documentation: https://github.com/sudotman/aynse
 
-Example usage: https://github.com/a-y-n/aynse
+Example usage: https://github.com/sudotman/aynse
 
 
 Installation
