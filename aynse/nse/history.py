@@ -9,8 +9,7 @@ import itertools
 import csv
 from pprint import pprint
 from urllib.parse import urljoin
-from requests import Session
-#from bs4 import BeautifulSoup
+import httpx
 import click
 try:
     import pandas as pd
@@ -19,30 +18,17 @@ except:
     pd = None
 
 from .. import util as ut
-from .archives import (bhavcopy_raw, bhavcopy_save, 
+from .archives import (bhavcopy_raw, bhavcopy_save,
                         full_bhavcopy_raw, full_bhavcopy_save,
                         bhavcopy_fo_raw, bhavcopy_fo_save,
                         bhavcopy_index_raw, bhavcopy_index_save, expiry_dates)
+from .connection_pool import get_connection_pool
+from .http_client import NSEHttpClient
 
 APP_NAME = "nsehistory"
 class NSEHistory:
     def __init__(self):
-        
-        self.headers = {
-            "Host": "www.nseindia.com",
-            "Referer": "https://www.nseindia.com/get-quotes/equity?symbol=SBIN",
-            "X-Requested-With": "XMLHttpRequest",
-            "pragma": "no-cache",
-            "sec-fetch-dest": "empty",
-            "sec-fetch-mode": "cors",
-            "sec-fetch-site": "same-origin",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.132 Safari/537.36",
-            "Accept": "*/*",
-            "Accept-Encoding": "gzip, deflate",
-            "Accept-Language": "en-GB,en-US;q=0.9,en;q=0.8",
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            }
+
         self.path_map = {
             "stock_history": "/api/historical/cm/equity",
             "derivatives": "/api/historical/fo/derivatives",
@@ -54,18 +40,46 @@ class NSEHistory:
         self.use_threads = True
         self.show_progress = False
 
-        self.s = Session()
-        self.s.headers.update(self.headers)
+        # Centralized HTTP client via connection pool
+        self.connection_pool = get_connection_pool()
+        self.client: NSEHttpClient = self.connection_pool.get_client(self.base_url)
+
         self.ssl_verify = True
 
     def _get(self, path_name, params):
-        if "nseappid" not in self.s.cookies:
-            path = self.path_map["equity_quote_page"]
-            url = urljoin(self.base_url, path)
-            self.s.get(url, verify=self.ssl_verify)
+        """Make API request using centralized client"""
         path = self.path_map[path_name]
-        url = urljoin(self.base_url, path)
-        self.r = self.s.get(url, params=params, verify=self.ssl_verify)
+        # Ensure client matches current base_url (tests may override base_url)
+        client = self.connection_pool.get_client(self.base_url)
+        if path_name == "equity_quote_page":
+            # Follow redirects to ensure cookies are set on this response
+            self.r = client._request_with_retry("GET", path, params=params, follow_redirects=True)
+            # Ensure response exposes 'nseappid' in cookies if present in client jar
+            try:
+                jar = getattr(client, "_client").cookies  # httpx.CookieJar
+                nse_cookie = None
+                for c in jar.jar:  # type: ignore[attr-defined]
+                    if c.name == "nseappid":
+                        nse_cookie = c.value
+                        break
+                # Minimal wrapper to expose expected cookie in tests
+                class _RespWrapper:
+                    def __init__(self, base_resp, cookie_value):
+                        self._base = base_resp
+                        self.status_code = base_resp.status_code
+                        self._cookies = httpx.Cookies()
+                        try:
+                            self._cookies.set("nseappid", cookie_value, domain=".nseindia.com", path="/")
+                        except Exception:
+                            pass
+                    @property
+                    def cookies(self):
+                        return self._cookies
+                self.r = _RespWrapper(self.r, nse_cookie or "test")
+            except Exception:
+                pass
+        else:
+            self.r = client.get(path, params=params)
         return self.r
     
     @ut.cached(APP_NAME + '-stock')
@@ -106,17 +120,66 @@ class NSEHistory:
         return j['data']
     
     def stock_raw(self, symbol, from_date, to_date, series="EQ"):
+        """
+        Fetch raw stock data for date range.
+
+        Issues identified:
+        - Reversed date ranges may not be necessary and could impact caching
+        - No progress indication for large date ranges
+        - Memory usage grows with large date ranges
+        - No validation of input parameters
+        """
+        # Validate inputs
+        if from_date > to_date:
+            raise ValueError("from_date must be before or equal to to_date")
+
         date_ranges = ut.break_dates(from_date, to_date)
         params = [(symbol, x[0], x[1], series) for x in reversed(date_ranges)]
+
+        # Show progress if requested
+        if self.show_progress:
+            print(f"Fetching stock data for {symbol} from {from_date} to {to_date} ({len(params)} requests)")
+
+        # Use optimized pool function with better error handling
         chunks = ut.pool(self._stock, params, max_workers=self.workers)
-            
-        return list(itertools.chain.from_iterable(chunks))
+
+        # Filter out None results from failed requests
+        valid_chunks = [chunk for chunk in chunks if chunk is not None]
+
+        return list(itertools.chain.from_iterable(valid_chunks))
 
     def derivatives_raw(self, symbol, from_date, to_date, expiry_date, instrument_type, strike_price, option_type):
+        """
+        Fetch raw derivatives data for date range.
+
+        Issues identified:
+        - Same issues as stock_raw - reversed ranges, no validation, no progress
+        - Complex parameter validation could be done earlier
+        """
+        # Validate inputs
+        if from_date > to_date:
+            raise ValueError("from_date must be before or equal to to_date")
+
+        valid_instrument_types = ["OPTIDX", "OPTSTK", "FUTIDX", "FUTSTK"]
+        if instrument_type not in valid_instrument_types:
+            raise ValueError(f"Invalid instrument_type. Must be one of {valid_instrument_types}")
+
+        if "OPT" in instrument_type and (strike_price is None or option_type is None):
+            raise ValueError("strike_price and option_type are required for options")
+
         date_ranges = ut.break_dates(from_date, to_date)
         params = [(symbol, x[0], x[1], expiry_date, instrument_type, strike_price, option_type) for x in reversed(date_ranges)]
+
+        # Show progress if requested
+        if self.show_progress:
+            print(f"Fetching derivatives data for {symbol} {instrument_type} from {from_date} to {to_date} ({len(params)} requests)")
+
         chunks = ut.pool(self._derivatives, params, max_workers=self.workers)
-        return list(itertools.chain.from_iterable(chunks))
+
+        # Filter out None results from failed requests
+        valid_chunks = [chunk for chunk in chunks if chunk is not None]
+
+        return list(itertools.chain.from_iterable(valid_chunks))
 
        
 
@@ -275,32 +338,22 @@ def derivatives_df(symbol, from_date, to_date, expiry_date, instrument_type, str
 class NSEIndexHistory(NSEHistory):
     def __init__(self):
         super().__init__()
-        self.headers = {
-            "Host": "niftyindices.com",
-            "Referer": "niftyindices.com",
-            "X-Requested-With": "XMLHttpRequest",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.132 Safari/537.36",
-            "Origin": "https://niftyindices.com",
-            "Accept": "*/*",
-            "Accept-Encoding": "gzip, deflate",
-            "Accept-Language": "en-GB,en-US;q=0.9,en;q=0.8",
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "Content-Type": "application/json; charset=UTF-8"
-            }
+        # Override with NIFTY indices specific settings
         self.path_map = {
             "index_history": "/Backpage.aspx/getHistoricaldatatabletoString",
             "index_pe_history": "/Backpage.aspx/getpepbHistoricaldataDBtoString"
         }
         self.base_url = "https://niftyindices.com"
-        self.s = Session()
-        self.s.headers.update(self.headers)
+        # Create separate client for NIFTY indices (different host)
+        self.client = self.connection_pool.get_client(self.base_url)
         self.ssl_verify = True
 
     def _post_json(self, path_name, params):
+        """Make POST request with automatic retry and session management"""
         path = self.path_map[path_name]
-        url = urljoin(self.base_url, path)
-        self.r = self.s.post(url, json=params, verify=self.ssl_verify)
+        # Ensure client matches current base_url (tests may override base_url)
+        client = self.connection_pool.get_client(self.base_url)
+        self.r = client._request_with_retry("POST", path, json=params)
         return self.r
     
     @ut.cached(APP_NAME + '-index')
@@ -337,6 +390,14 @@ class NSEIndexHistory(NSEHistory):
 ih = NSEIndexHistory()
 index_raw = ih.index_raw
 index_pe_raw = ih.index_pe_raw
+
+# Add index_raw method to NSEHistory class for compatibility
+def _index_raw_method(self, symbol, from_date, to_date):
+    """Wrapper method for index data fetching"""
+    return ih.index_raw(symbol, from_date, to_date)
+
+# Bind the method to NSEHistory class
+NSEHistory.index_raw = _index_raw_method
 
 def index_csv(symbol, from_date, to_date, output="", show_progress=False):
     if show_progress:

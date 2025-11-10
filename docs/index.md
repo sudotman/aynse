@@ -1,55 +1,37 @@
 # `aynse`
 
-`aynse` is a lean, modern Python library for fetching data from the National Stock Exchange (NSE) of India. It is a fork of the unmaintained `jugaad-data` library, aiming to provide a robust and regularly updated tool for financial data analysis.
-
-This library fetches data from the new NSE website and is future-proof. Many other libraries still rely on the old website and may eventually stop working.
+Lean, modern NSE data library with resilient networking.
 
 ## Features
 
--   **Historical Data:** Fetch historical stock and index data.
--   **Derivatives Data:** Download futures and options data.
--   **Bhavcopy:** Download daily bhavcopy reports for equity, F&O, and indices.
--   **Live Market Data:** Get real-time stock quotes.
--   **Holiday Information:** Retrieve a list of trading holidays for a given year.
--   **Command-Line Interface:** A simple CLI for quick data downloads.
--   **Pandas Integration:** Returns data as Pandas DataFrames for easy analysis.
+- Historical and derivatives data
+- Bhavcopy downloads (Equity, F&O, Index)
+- Live market data
+- CLI helpers
+- Resilient HTTP client (HTTP/2, retries, pooling)
 
-## Installation
-
-You can install `aynse` directly from PyPI:
+## Install
 
 ```sh
 pip install aynse
 ```
 
-You can optionally install `pandas` library in case you are interested in fetching data directly into pandas dataframes, in which case you can run:
-
-```sh
-pip install aynse pandas
-```
-
 ## Quick Start
-
-### Download Bhavcopies and Historical Data
 
 ```python
 from datetime import date
-from aynse.nse import bhavcopy_save, bhavcopy_fo_save
+from aynse.nse import stock_df
 
-# Download bhavcopy
-bhavcopy_save(date(2024, 1, 1), "./")
-
-# Download bhavcopy for futures and options
-bhavcopy_fo_save(date(2024, 1, 1), "./")
+df = stock_df("RELIANCE", date(2024,1,1), date(2024,1,31))
+print(df.head())
 ```
 
-### Fetch Live Quotes
+## HTTP Client (advanced)
 
 ```python
-from aynse.nse import NSELive
-from pprint import pprint
-
-n = NSELive()
-q = n.stock_quote("INFY")
-pprint(q)
+from aynse.nse.connection_pool import get_connection_pool
+client = get_connection_pool().get_client("https://www.nseindia.com")
+data = client.get_json("/api/marketStatus")
 ```
+
+See `historical.md` and `live.md` for more.

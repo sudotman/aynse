@@ -7,12 +7,13 @@ import os
 import io
 import csv
 import zipfile
-import requests
 import pprint
 import json
 import gzip
 import pandas as pd
 from io import StringIO
+from .connection_pool import get_connection_pool
+from .http_client import NSEHttpClient
 def unzip(function):
     
     def unzipper(*args, **kwargs):
@@ -41,45 +42,28 @@ class NSEArchives:
     timeout = 4 
        
     def __init__(self):
-        self.s = requests.Session()
-        h = {
-            "Host": "www.nseindia.com",
-            "Referer": "https://www.nseindia.com/get-quotes/equity?symbol=SBIN",
-            "X-Requested-With": "XMLHttpRequest",
-            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/84.0.4147.125 Safari/537.36",
-            "accept-encoding": "gzip, deflate, br",
-            "accept": "application/json, text/javascript, */*; q=0.01",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-          
-    }
-        self.s.headers.update(h)
+        # Centralized clients
+        self.connection_pool = get_connection_pool()
+        self.client_arch: NSEHttpClient = self.connection_pool.get_client(self.base_url)
+        self.client_nse: NSEHttpClient = self.connection_pool.get_client("https://www.nseindia.com")
+
         self._routes = {
                 "bhavcopy": "/content/historical/EQUITIES/{yyyy}/{MMM}/cm{dd}{MMM}{yyyy}bhav.csv.zip",
                 "bhavcopy_full": "/products/content/sec_bhavdata_full_{dd}{mm}{yyyy}.csv",
                 "bulk_deals": "/content/equities/bulk.csv",
                 "bhavcopy_fo": "/content/historical/DERIVATIVES/{yyyy}/{MMM}/fo{dd}{MMM}{yyyy}bhav.csv.zip"
             }
-          # Establish NSE session for new API endpoints
-        self._setup_nse_session()
+        # Clients handle priming internally; no explicit setup required
         
     def _setup_nse_session(self):
-        """Setup NSE session required for new API endpoints"""
-        try:
-            # Visit main page first to establish session
-            print("Setting up NSE session...")
-            r = self.s.get("https://www.nseindia.com/get-quotes/equity?symbol=SBIN", timeout=self.timeout)
-            r.raise_for_status()
-            print("NSE session setup successful.")
-        except Exception as e:
-            # Session setup is best effort, continue even if it fails
-            print(f"Warning: NSE session setup failed: {e}")
-            pass
+        """Deprecated - retained for compatibility; clients self-prime."""
+        return
         
     def get(self, rout, **params):
-        url = self.base_url + self._routes[rout].format(**params)
-        self.r = self.s.get(url, timeout=self.timeout)
+        """Make API request with automatic retry and session management"""
+        path = self._routes[rout].format(**params)
+        client_arch = self.connection_pool.get_client(self.base_url)
+        self.r = client_arch._request_with_retry("GET", path)
         return self.r
     
     def _get_new_bhavcopy(self, dt):
@@ -93,7 +77,8 @@ class NSEArchives:
             'type': 'Archives'
         }
         
-        response = self.s.get(url, params=params, timeout=self.timeout)
+        client_nse = self.connection_pool.get_client("https://www.nseindia.com")
+        response = client_nse.get(url, params=params)
         return response
     
     def _get_old_bhavcopy(self, dt):
@@ -107,7 +92,8 @@ class NSEArchives:
             'type': 'Archives'
         }
         
-        response = self.s.get(url, params=params, timeout=self.timeout)
+        client_nse = self.connection_pool.get_client("https://www.nseindia.com")
+        response = client_nse.get(url, params=params)
         return response
 
     def _get_new_bhavcopy_fo(self, dt):
@@ -122,7 +108,8 @@ class NSEArchives:
             'mode': 'single'
         }
 
-        response = self.s.get(url, params=params, timeout=self.timeout)
+        client_nse = self.connection_pool.get_client("https://www.nseindia.com")
+        response = client_nse.get(url, params=params)
         return response
     
     def _get_old_bhavcopy_fo(self, dt):
@@ -135,13 +122,21 @@ class NSEArchives:
             'date': date_str,
             'type': 'Archives'
         }
-        response = self.s.get(url, params=params, timeout=self.timeout)
+        client_nse = self.connection_pool.get_client("https://www.nseindia.com")
+        response = client_nse.get(url, params=params)
         return response
 
     def _handle_bhavcopy_response(self, response):
         """
         Handles the response from a bhavcopy request.
         It may be a JSON response with a download link, or a direct zip file.
+
+        Issues identified:
+        - Repeated session creation for file downloads
+        - No connection reuse for multiple downloads
+        - Error handling could be more specific
+        - No retry logic for transient failures
+        - Large response content loaded entirely into memory
         """
         # Check for direct file download first by inspecting headers
         content_type = response.headers.get('Content-Type', '')
@@ -156,17 +151,18 @@ class NSEArchives:
             response_data = response.json()
             if not response_data or len(response_data) == 0:
                 raise Exception("Empty response from API")
-                
+
             if 'file' not in response_data[0]:
                 raise Exception("No download link found in API response")
-                
+
             download_url = response_data[0]['file']
-            
-            # Download the actual file
-            file_response = self.s.get(download_url, timeout=self.timeout)
+
+            # Use same session for file download (connection reuse)
+            client_nse = self.connection_pool.get_client("https://www.nseindia.com")
+            file_response = client_nse._request_with_retry("GET", download_url)
             if file_response.status_code != 200:
                 raise Exception(f"File download failed with status code {file_response.status_code}")
-            
+
             return file_response.content
         except json.JSONDecodeError:
             # If JSON parsing fails, and it wasn't identified as a zip,
@@ -175,10 +171,12 @@ class NSEArchives:
                  # Heuristic: Check for zip file signature
                 if response.content.startswith(b'PK\x03\x04'):
                     return response.content
-            
-            print("Failed to parse JSON and not a recognized file format. Response content:")
-            print(response.text[:500]) # Print first 500 chars
-            raise Exception("Failed to process API response.")
+
+            # More specific error message
+            error_msg = f"Failed to parse JSON response. Content-Type: {content_type}, Status: {response.status_code}"
+            if response.text:
+                error_msg += f", Response preview: {response.text[:200]}"
+            raise Exception(error_msg)
 
 
     def bhavcopy_raw(self, dt, as_dataframe=False):
@@ -188,6 +186,12 @@ class NSEArchives:
         - Before July 8, 2024: Uses old CSV format API
         - After July 8, 2024: Uses new ZIP format API with different structure
 
+        Issues identified:
+        - Complex nested ZIP processing could be optimized
+        - Large files loaded entirely into memory
+        - No streaming for large files
+        - Repeated file extension checks
+
         Args:
             dt (date): Date for bhavcopy
             as_dataframe (bool): If True, returns a pandas DataFrame. If False, returns CSV text.
@@ -196,7 +200,7 @@ class NSEArchives:
             response = self._get_old_bhavcopy(dt)
         else:
             response = self._get_new_bhavcopy(dt)
-        
+
         if response.status_code != 200:
             if "file not available" in response.text.lower():
                 raise FileNotFoundError(f"Bhavcopy not available for {dt.strftime('%d-%m-%Y')}")
@@ -204,28 +208,29 @@ class NSEArchives:
 
         try:
             file_content = self._handle_bhavcopy_response(response)
-            fp = io.BytesIO(file_content)
-            with zipfile.ZipFile(file=fp) as zf:
-                nested_zip_files = [f for f in zf.namelist() if f.lower().endswith('.zip')]
-                if nested_zip_files:
-                    nested_zip_filename = nested_zip_files[0]
-                    with zf.open(nested_zip_filename) as nested_zip_file:
-                        nested_zip_content = nested_zip_file.read()
-                        nested_fp = io.BytesIO(nested_zip_content)
-                        with zipfile.ZipFile(file=nested_fp) as nested_zf:
-                            csv_files = [f for f in nested_zf.namelist() if f.lower().endswith('.csv')]
-                            if not csv_files:
-                                raise Exception("No CSV file found in nested ZIP archive")
-                            fname = csv_files[0]
-                            with nested_zf.open(fname) as fp_bh:
-                                csv_text = fp_bh.read().decode('utf-8')
-                else:
-                    csv_files = [f for f in zf.namelist() if f.lower().endswith('.csv')]
-                    if not csv_files:
-                        raise Exception("No CSV or nested ZIP file found in the archive.")
-                    fname = csv_files[0]
-                    with zf.open(fname) as fp_bh:
-                        csv_text = fp_bh.read().decode('utf-8')
+
+            def extract_csv_from_zip(zip_content):
+                """Helper function to extract CSV from potentially nested ZIP files"""
+                with zipfile.ZipFile(io.BytesIO(zip_content)) as zf:
+                    # Check for nested ZIP files first
+                    nested_zips = [f for f in zf.namelist() if f.lower().endswith('.zip')]
+
+                    if nested_zips:
+                        # Handle nested ZIP
+                        with zf.open(nested_zips[0]) as nested_file:
+                            nested_content = nested_file.read()
+                            return extract_csv_from_zip(nested_content)
+                    else:
+                        # Extract CSV directly
+                        csv_files = [f for f in zf.namelist() if f.lower().endswith('.csv')]
+                        if not csv_files:
+                            raise Exception("No CSV file found in ZIP archive")
+
+                        with zf.open(csv_files[0]) as csv_file:
+                            return csv_file.read().decode('utf-8')
+
+            csv_text = extract_csv_from_zip(file_content)
+
             if as_dataframe:
                 return pd.read_csv(StringIO(csv_text))
             return csv_text
@@ -266,7 +271,8 @@ class NSEArchives:
             'mode': 'single'
         }
         
-        response = self.s.get(url, params=params, timeout=self.timeout)
+        client_nse = self.connection_pool.get_client("https://www.nseindia.com")
+        response = client_nse.get(url, params=params)
         
         if response.status_code != 200:
             if "file not available" in response.text.lower():
@@ -303,9 +309,8 @@ class NSEArchives:
             'to': to_date_str,
         }
         
-        response = self.s.get(url, params=params, timeout=self.timeout)
-        response.raise_for_status()
-        return response.json()
+        data = self.client_nse.get_json(url, params=params)
+        return data
     
     def bulk_deals_save(self, from_date: date, to_date: date, dest: str):
         """
@@ -396,7 +401,7 @@ class NSEIndicesArchives(NSEArchives):
        "Connection": "keep-alive",
     }
 
-        self.s.headers.update(self.h)
+        # Headers are handled by client; if customization is needed, consider extending NSEHttpClient
 
     def bhavcopy_index_raw(self, dt):
         """Downloads raw index bhavcopy text for a specific date"""
@@ -483,7 +488,8 @@ class NSEIndexConstituents(NSEArchives):
           "Connection": "keep-alive",
         }
 
-        self.s.headers.update(self.h)
+        # Switch client to niftyindices host
+        self.client_arch = self.connection_pool.get_client(self.base_url)
 
     def _build_routes(self) -> dict:
         routes = {}

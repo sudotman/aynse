@@ -2,8 +2,10 @@
     Implements live data fetch functionality
 """
 from datetime import datetime
-from requests import Session
 from ..util import live_cache
+from .connection_pool import get_connection_pool
+from .http_client import NSEHttpClient
+
 class NSELive:
     time_out = 5
     base_url = "https://www.nseindia.com/api"
@@ -27,29 +29,15 @@ class NSELive:
     }
     
     def __init__(self):
-        self.s = Session()
-        h = {
-            "Host": "www.nseindia.com",
-            "Referer": "https://www.nseindia.com/get-quotes/equity?symbol=SBIN",
-            "X-Requested-With": "XMLHttpRequest",
-            "pragma": "no-cache",
-            "sec-fetch-dest": "empty",
-            "sec-fetch-mode": "cors",
-            "sec-fetch-site": "same-origin",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.132 Safari/537.36",
-            "Accept": "*/*",
-            "Accept-Encoding": "gzip, deflate",
-            "Accept-Language": "en-GB,en-US;q=0.9,en;q=0.8",
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            }
-        self.s.headers.update(h)
-        self.s.get(self.page_url)
+        """Initialize NSELive with centralized HTTP client"""
+        self.connection_pool = get_connection_pool()
+        # http client is keyed by host, not path
+        self.client: NSEHttpClient = self.connection_pool.get_client("https://www.nseindia.com")
 
     def get(self, route, payload={}):
-        url = self.base_url + self._routes[route]
-        r = self.s.get(url, params=payload)
-        return r.json()
+        """Make API request using centralized client with retries and validation"""
+        path = "/api" + self._routes[route]
+        return self.client.get_json(path, params=payload)
 
     @live_cache
     def stock_quote(self, symbol):

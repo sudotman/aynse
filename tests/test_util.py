@@ -102,12 +102,13 @@ class TestCache(TestCase):
         x = demo_function([0], 'v1', 'v2')
         self.assertEqual(x, {'x': 'v1', 'y': 'v2'})
         # Check if path exists
-        path = os.path.join(user_cache_dir("testapp"), 'v1-v2')
+        path = os.path.join(user_cache_dir("testapp", "testapp"), 'v1__v1-v2.gz')
         self.assertTrue(os.path.isfile(path))
         # Next time it should read from cache, let us see if cache reading works
         # update the file with new values
         j = {'x': 'x1', 'y': 'y1'}
-        with open(path, 'wb') as fp:
+        import gzip
+        with gzip.open(path, 'wb') as fp:
             pickle.dump(j, fp)
         # run the function
         x = demo_function([0], 'v1', 'v2')
@@ -118,12 +119,13 @@ class TestCache(TestCase):
         x = d.demo_method('v1', 'v2')
         self.assertEqual(x, {'x': 'v1', 'y': 'v2'})
         # Check if path exists
-        path = os.path.join(user_cache_dir("testapp"), 'v1-v2')
+        path = os.path.join(user_cache_dir("testapp", "testapp"), 'v1__v1-v2.gz')
         self.assertTrue(os.path.isfile(path))
         # Next time it should read from cache, let us see if cache reading works
         # update the file with new values
         j = {'x': 'x1', 'y': 'y1'}
-        with open(path, 'wb') as fp:
+        import gzip
+        with gzip.open(path, 'wb') as fp:
             pickle.dump(j, fp)
         # run the function
         x = d.demo_method('v1', 'v2')
@@ -133,13 +135,13 @@ class TestCache(TestCase):
         with pytest.raises(Exception):
             demo_crashed('fiz', 'buzz')        
         demo_function([0], 'lorem', 'ipsem') 
-        path = os.path.join(user_cache_dir("testapp"), 'lorem-ipsem')
+        path = os.path.join(user_cache_dir("testapp", "testapp"), 'v1__lorem-ipsem.gz')
         assert os.path.isfile(path)
         try:
             demo_crashed('buzz', 'fizz')
         except:
             pass
-        path = os.path.join(user_cache_dir("testapp"), 'buzz-fizz')
+        path = os.path.join(user_cache_dir("testapp", "testapp"), 'v1__buzz-fizz.gz')
         assert not os.path.isfile(path)
     
     def test_demo_with_environment_var(self):
@@ -148,12 +150,13 @@ class TestCache(TestCase):
         self.assertEqual(x, {'x': 'v1', 'y': 'v2'})
         
         # Check if path exists
-        path = os.path.join("/tmp", 'testapp', 'v1-v2')
+        path = os.path.join("/tmp", 'testapp', 'testapp', 'v1__v1-v2.gz')
         self.assertTrue(os.path.isfile(path))
         # Next time it should read from cache, let us see if cache reading works
         # update the file with new values
         j = {'x': 'x1', 'y': 'y1'}
-        with open(path, 'wb') as fp:
+        import gzip
+        with gzip.open(path, 'wb') as fp:
             pickle.dump(j, fp)
         # run the function
         x = demo_function([0], 'v1', 'v2')
@@ -168,8 +171,11 @@ class QuoteApp:
 def test_live_cache():
     q = QuoteApp()
     r = q.rt_quote()
-    v = q._cache['rt_quote']['value']
-    ts = q._cache['rt_quote']['timestamp']
+    import hashlib
+    key_data = "rt_quote:"  # function name + ':' with no args
+    cache_key = hashlib.md5(key_data.encode()).hexdigest()
+    v = q._cache[cache_key]['value']
+    ts = q._cache[cache_key]['timestamp']
     assert q.rt_quote() == v
     time.sleep(3)
     assert q.rt_quote() > v

@@ -32,6 +32,11 @@ stock_csv(symbol="RELIANCE", from_date=date(2024, 1, 1),
           to_date=date(2024, 1, 31), series="EQ", output="/path/to/file.csv")
 ```
 
+## Tips
+- Large ranges are chunked month-by-month for reliability
+- Retries with backoff are applied under the hood
+- For many symbols, use the request batcher
+
 ## Download Historical Index Data
 
 ```python
