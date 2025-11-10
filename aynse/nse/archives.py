@@ -11,6 +11,7 @@ import pprint
 import json
 import gzip
 import pandas as pd
+import requests
 from io import StringIO
 from .connection_pool import get_connection_pool
 from .http_client import NSEHttpClient
