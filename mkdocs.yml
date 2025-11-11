@@ -40,4 +40,5 @@ nav:
   - Historical Data: historical.md
   - Live Data: live.md
   - CLI: cli.md
+  - Data Calls: data_calls.md
   - API Reference: api.md
