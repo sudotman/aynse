@@ -318,6 +318,20 @@ git push && git push --tags
 
 4. create github release → automatically publishes to pypi.
 
+### everything to do with release/version control
+# show current version
+python scripts/bump_version.py --current
+
+# bump versions (updates pyproject.toml only)
+python scripts/bump_version.py patch    # 1.1.0 -> 1.1.1
+python scripts/bump_version.py minor    # 1.1.0 -> 1.2.0
+python scripts/bump_version.py major    # 1.1.0 -> 2.0.0
+python scripts/bump_version.py --set 2.0.0  # set exact version
+
+# preview changes without modifying
+python scripts/bump_version.py patch --dry-run
+
+
 ## license
 
 this project has a (custom) mit* license but extends limitations. if you're an agency/corporate with >2 employees, you cannot wrap this project or use it without prior written permission from the author. if you're an individual, you can use it freely for personal projects.
