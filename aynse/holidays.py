@@ -342,10 +342,9 @@ def add_holiday(dt: date) -> None:
     Args:
         dt: Date to add as a holiday
     """
-    global _HOLIDAYS_CACHE
-    if _HOLIDAYS_CACHE is None:
-        _get_all_holidays()
-    _HOLIDAYS_CACHE.add(dt)  # type: ignore[union-attr]
+    # Ensure cache is initialized (this populates the global)
+    holidays_set = _get_all_holidays()
+    holidays_set.add(dt)
 
 
 def clear_holiday_cache() -> None:
