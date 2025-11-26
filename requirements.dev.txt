@@ -18,3 +18,9 @@ mkdocstrings[python]>=0.25.0
 mypy>=1.0.0
 types-requests>=2.31.0
 appdirs>=1.4.4
+tenacity>=8.2.3
+httpx[http2]>=0.27.0
+requests
+click>=7.1.2
+beautifulsoup4>=4.9.3
+brotli
