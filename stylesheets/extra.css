@@ -1,0 +1,60 @@
+/* Custom styles for aynse documentation */
+
+/* Code block improvements */
+.md-typeset code {
+  font-size: 0.85em;
+}
+
+/* Table improvements */
+.md-typeset table:not([class]) {
+  font-size: 0.8rem;
+}
+
+.md-typeset table:not([class]) th {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Admonition tweaks */
+.md-typeset .admonition {
+  font-size: 0.85rem;
+}
+
+/* Grid cards for landing page */
+.md-typeset .grid.cards > ul > li {
+  border-radius: 0.5rem;
+  transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+.md-typeset .grid.cards > ul > li:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* API reference styling */
+.doc-object {
+  margin-bottom: 2rem;
+}
+
+.doc-signature {
+  font-size: 0.9rem;
+}
+
+/* Navigation improvements */
+.md-nav__link {
+  font-size: 0.85rem;
+}
+
+/* Footer */
+.md-footer {
+  margin-top: 2rem;
+}
+
+/* Responsive tables */
+@media screen and (max-width: 76.1875em) {
+  .md-typeset table:not([class]) {
+    display: block;
+    overflow-x: auto;
+  }
+}
+
