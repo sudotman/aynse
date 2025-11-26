@@ -17,3 +17,4 @@ mkdocs-material>=9.5.0
 mkdocstrings[python]>=0.25.0
 mypy>=1.0.0
 types-requests>=2.31.0
+appdirs>=1.4.4

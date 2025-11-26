@@ -28,7 +28,7 @@ def policy_rate_archive(n: int = 10) -> List[Dict[str, Any]]:
     
     Args:
         n: Number of past rate records to fetch (default: 10).
-           Higher values will fetch more historical data.
+            Higher values will fetch more historical data.
            
     Returns:
         List of dictionaries containing policy rate data.

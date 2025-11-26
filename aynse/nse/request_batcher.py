@@ -71,10 +71,12 @@ class RequestBatcher:
         self._stats = BatchStats(0, 0, 0, 0.0, 0.0, 0.0)
         self._lock = threading.Lock()
 
-    def batch_requests(self,
-                      requests: List[Dict[str, Any]],
-                      request_func: Callable,
-                      **kwargs) -> List[BatchResult]:
+    def batch_requests(
+        self,
+        requests: List[Dict[str, Any]],
+        request_func: Callable[..., Any],
+        **kwargs: Any
+    ) -> List[BatchResult]:
         """
         Process multiple requests in batches.
 
@@ -139,11 +141,13 @@ class RequestBatcher:
 
         return all_results
 
-    async def abatch_requests(self,
-                              requests: List[Dict[str, Any]],
-                              request_coro_func: Callable[..., "asyncio.Future"],
-                              max_concurrency: Optional[int] = None,
-                              **kwargs) -> List[BatchResult]:
+    async def abatch_requests(
+        self,
+        requests: List[Dict[str, Any]],
+        request_coro_func: Callable[..., "asyncio.Future[Any]"],
+        max_concurrency: Optional[int] = None,
+        **kwargs: Any
+    ) -> List[BatchResult]:
         """
         Async batch processing with bounded concurrency.
 

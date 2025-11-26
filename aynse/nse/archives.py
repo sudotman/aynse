@@ -559,7 +559,13 @@ index_constituent_save = ic.index_constituent_save
 index_constituent_save_all = ic.index_constituent_save_all
 
 
-def expiry_dates(dt, instrument_type="", symbol="", contracts=0, months_ahead=6):
+def expiry_dates(
+    dt: date,
+    instrument_type: str = "",
+    symbol: str = "",
+    contracts: int = 0,
+    months_ahead: int = 6
+) -> list:
     """
     Algorithmically calculate expiry dates based on NSE rules.
     
