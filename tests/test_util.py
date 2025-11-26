@@ -96,13 +96,20 @@ def demo_crashed(a, b):
 class TestCache(TestCase):
     def setUp(self):
         self.setUpPyfakefs()
+        # Use environment variable to have predictable cache path with pyfakefs
+        os.environ['J_CACHE_DIR'] = '/fakecache'
+        self.cache_dir = os.path.join('/fakecache', 'testapp', 'testapp')
+
+    def tearDown(self):
+        if 'J_CACHE_DIR' in os.environ:
+            del os.environ['J_CACHE_DIR']
 
     def test_demo_function(self):
-        # Check if function reeturns correct value
+        # Check if function returns correct value
         x = demo_function([0], 'v1', 'v2')
         self.assertEqual(x, {'x': 'v1', 'y': 'v2'})
         # Check if path exists
-        path = os.path.join(user_cache_dir("testapp", "testapp"), 'v1__v1-v2.gz')
+        path = os.path.join(self.cache_dir, 'v1__v1-v2.gz')
         self.assertTrue(os.path.isfile(path))
         # Next time it should read from cache, let us see if cache reading works
         # update the file with new values
@@ -119,7 +126,7 @@ class TestCache(TestCase):
         x = d.demo_method('v1', 'v2')
         self.assertEqual(x, {'x': 'v1', 'y': 'v2'})
         # Check if path exists
-        path = os.path.join(user_cache_dir("testapp", "testapp"), 'v1__v1-v2.gz')
+        path = os.path.join(self.cache_dir, 'v1__v1-v2.gz')
         self.assertTrue(os.path.isfile(path))
         # Next time it should read from cache, let us see if cache reading works
         # update the file with new values
@@ -135,13 +142,13 @@ class TestCache(TestCase):
         with pytest.raises(Exception):
             demo_crashed('fiz', 'buzz')        
         demo_function([0], 'lorem', 'ipsem') 
-        path = os.path.join(user_cache_dir("testapp", "testapp"), 'v1__lorem-ipsem.gz')
+        path = os.path.join(self.cache_dir, 'v1__lorem-ipsem.gz')
         assert os.path.isfile(path)
         try:
             demo_crashed('buzz', 'fizz')
-        except:
+        except Exception:
             pass
-        path = os.path.join(user_cache_dir("testapp", "testapp"), 'v1__buzz-fizz.gz')
+        path = os.path.join(self.cache_dir, 'v1__buzz-fizz.gz')
         assert not os.path.isfile(path)
     
     def test_demo_with_environment_var(self):

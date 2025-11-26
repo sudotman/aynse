@@ -1,34 +1,69 @@
-name: Deploy Docs
+name: Deploy Documentation
 
 on:
   push:
     branches:
       - master
       - main
+    paths:
+      - 'docs/**'
+      - 'mkdocs.yml'
+      - 'aynse/**'
+      - '.github/workflows/deploy-docs.yml'
   workflow_dispatch:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
 
 jobs:
-  build-and-deploy:
+  build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Required for git history/versioning
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+          cache: 'pip'
 
-      - name: Install docs dependencies
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          if [ -f requirements.dev.txt ]; then pip install -r requirements.dev.txt; fi
-          pip install mkdocs mkdocs-material "mkdocstrings[python]"
+          pip install -e .
+          pip install mkdocs>=1.6.0 \
+                      mkdocs-material>=9.5.0 \
+                      "mkdocstrings[python]>=0.25.0" \
+                      pymdown-extensions>=10.0
 
-      - name: Build and deploy (gh-pages)
+      - name: Configure Git
         run: |
-          mkdocs gh-deploy --force
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
+      - name: Build documentation
+        run: mkdocs build --strict
+
+      - name: Deploy to GitHub Pages
+        run: mkdocs gh-deploy --force --clean
+
+  # Alternative: Deploy to GitHub Pages artifact (for custom domains)
+  # deploy-pages:
+  #   needs: build
+  #   runs-on: ubuntu-latest
+  #   environment:
+  #     name: github-pages
+  #     url: ${{ steps.deployment.outputs.page_url }}
+  #   steps:
+  #     - name: Deploy to GitHub Pages
+  #       id: deployment
+  #       uses: actions/deploy-pages@v4

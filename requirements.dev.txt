@@ -1,10 +1,13 @@
-pytest==7.1.2
+pytest>=7.4.0
 pytest-testmon
 pytest-watch
+pytest-cov>=4.1.0
+pytest-asyncio>=0.21.0
 flask==3.0
 werkzeug<3.1
 pyfakefs
 pandas
+numpy
 jupyterlab
 twine
 lxml>=4.0.0
@@ -12,3 +15,5 @@ pkginfo>=1.10.0
 mkdocs>=1.6.0
 mkdocs-material>=9.5.0
 mkdocstrings[python]>=0.25.0
+mypy>=1.0.0
+types-requests>=2.31.0

@@ -1,29 +1,51 @@
 """
-    Implements functionality to download historical stock, index and
-    derivatives data from NSE and
-    NSEIndices website
+Implements functionality to download historical stock, index and
+derivatives data from NSE and NSEIndices website.
+
+This module provides:
+- Stock historical data (OHLCV)
+- Index historical data
+- Derivatives (F&O) historical data
+- Export to CSV, DataFrame formats
 """
+
+from __future__ import annotations
+
 import os
 import json
 import itertools
 import csv
-from pprint import pprint
-from urllib.parse import urljoin
+import logging
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
+
 import httpx
 import click
+
+from .. import util as ut
+from .connection_pool import get_connection_pool
+from .http_client import NSEHttpClient
+
+# Optional pandas import
 try:
     import pandas as pd
     import numpy as np
-except:
-    pd = None
+    HAS_PANDAS = True
+except ImportError:
+    pd = None  # type: ignore[assignment]
+    np = None  # type: ignore[assignment]
+    HAS_PANDAS = False
 
-from .. import util as ut
-from .archives import (bhavcopy_raw, bhavcopy_save,
-                        full_bhavcopy_raw, full_bhavcopy_save,
-                        bhavcopy_fo_raw, bhavcopy_fo_save,
-                        bhavcopy_index_raw, bhavcopy_index_save, expiry_dates)
-from .connection_pool import get_connection_pool
-from .http_client import NSEHttpClient
+logger = logging.getLogger(__name__)
+logger.addHandler(logging.NullHandler())
+
+# Import archive functions for re-export
+from .archives import (
+    bhavcopy_raw, bhavcopy_save,
+    full_bhavcopy_raw, full_bhavcopy_save,
+    bhavcopy_fo_raw, bhavcopy_fo_save,
+    bhavcopy_index_raw, bhavcopy_index_save, 
+    expiry_dates
+)
 
 APP_NAME = "nsehistory"
 class NSEHistory:

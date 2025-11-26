@@ -1,44 +1,132 @@
 site_name: aynse
-site_description: 'a lean, modern Python library for fetching data from the National Stock Exchange (NSE) of India.'
+site_description: A lean, modern Python library for fetching data from the National Stock Exchange (NSE) of India.
+site_url: https://satyamkashyap.com/aynse
 repo_url: https://github.com/sudotman/aynse
-repo_name: satyam/aynse
+repo_name: sudotman/aynse
+edit_uri: edit/master/docs/
 
 theme:
   name: material
   features:
     - navigation.tabs
+    - navigation.tabs.sticky
     - navigation.sections
-    - toc.integrate
+    - navigation.expand
+    - navigation.path
     - navigation.top
+    - navigation.footer
     - search.suggest
     - search.highlight
+    - search.share
     - content.tabs.link
     - content.code.annotation
     - content.code.copy
+    - content.action.edit
+    - toc.follow
   language: en
   palette:
-    - scheme: default
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
       toggle:
-        icon: material/weather-night
+        icon: material/brightness-7
         name: Switch to dark mode
-    - scheme: slate
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
       toggle:
-        icon: material/weather-sunny
+        icon: material/brightness-4
         name: Switch to light mode
+  font:
+    text: Roboto
+    code: Roboto Mono
+  icon:
+    repo: fontawesome/brands/github
 
 plugins:
-  - search
+  - search:
+      separator: '[\s\-,:!=\[\]()"`/]+|\.(?!\d)|&[lg]t;|(?!\b)(?=[A-Z][a-z])'
   - mkdocstrings:
+      default_handler: python
       handlers:
         python:
           options:
             show_root_heading: true
+            show_root_toc_entry: true
             show_source: false
+            show_signature_annotations: true
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            docstring_style: google
+            docstring_section_style: spacy
+            merge_init_into_class: true
+            separate_signature: true
+            signature_crossrefs: true
+
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - toc:
+      permalink: true
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.magiclink:
+      repo_url_shorthand: true
+      user: sudotman
+      repo: aynse
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
 
 nav:
   - Home: index.md
-  - Historical Data: historical.md
-  - Live Data: live.md
-  - CLI: cli.md
-  - Data Calls: data_calls.md
-  - API Reference: api.md
+  - Getting Started:
+    - Historical Data: historical.md
+    - Live Data: live.md
+    - CLI: cli.md
+  - Reference:
+    - API Reference: api.md
+    - Data Calls: data_calls.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/sudotman/aynse
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/aynse/
+  generator: false
+  version:
+    provider: mike
+
+extra_css:
+  - stylesheets/extra.css
+
+copyright: Copyright &copy; 2024 satyam-kashyap
