@@ -71,10 +71,10 @@ for market in status['marketState']:
 
 ## Option Chains
 
-### Index Option Chain
+### Index Option Chain (v3)
 
 ```python
-# NIFTY option chain
+# NIFTY option chain (uses option-chain-v3; auto-selects first expiry)
 chain = live.index_option_chain("NIFTY")
 
 records = chain['records']
@@ -89,10 +89,10 @@ for strike in atm[:5]:
     print(f"Strike {strike['strikePrice']}: CE OI={ce.get('openInterest', 0)}, PE OI={pe.get('openInterest', 0)}")
 ```
 
-### Equity Option Chain
+### Equity Option Chain (v3)
 
 ```python
-# RELIANCE option chain
+# RELIANCE option chain (uses option-chain-v3; auto-selects first expiry)
 chain = live.equities_option_chain("RELIANCE")
 
 records = chain['records']
@@ -160,15 +160,19 @@ for stock in preopen['data'][:5]:
 
 ## Chart/Tick Data
 
-Get intraday tick data for charting:
+Get intraday tick data for charting. NSE recently shifted these to their NextApi
+endpoints; the client handles the right URL/params for you.
 
 ```python
-# Stock tick data
-ticks = live.tick_data("RELIANCE")
-chart_data = ticks['grapthData']  # Note: NSE typo in response
+# Stock tick data (equity) – uses getSymbolChartData under the hood
+ticks = live.tick_data("RELIANCE")          # default flag="1D"
+chart_data = ticks['grapthData']            # Note: NSE typo in response
 
-# Index tick data
+# Index tick data – uses getGraphChart with flag="1D"
 index_ticks = live.tick_data("NIFTY 50", indices=True)
+
+# Alternate timeframes (if needed)
+week_ticks = live.tick_data("RELIANCE", flag="5D")
 ```
 
 ## Market Turnover

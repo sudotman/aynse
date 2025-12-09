@@ -59,16 +59,44 @@ class NSELive:
         return self.get("market_status", {})
 
     @live_cache
-    def chart_data(self, symbol, indices=False):
-        data = {"index" : symbol + "EQN"}
+    def chart_data(self, symbol, indices=False, flag="1D"):
+        """
+        Fetch intraday/period graph data.
+
+        NSE moved live chart data to NextApi:
+        - Equities: /api/NextApi/apiClient/GetQuoteApi?functionName=getSymbolChartData
+                    symbol must be <SYMBOL>EQN (library adds suffix automatically)
+                    uses `days` parameter (e.g., 1D, 5D, 3M)
+        - Indices:  /api/NextApi/apiClient?functionName=getGraphChart
+                    uses `type` and `flag` (e.g., 1D, 5D, 6M)
+
+        We normalize responses so callers still receive a dict with grapthData.
+        """
+        # Index route
         if indices:
-            data["index"] = symbol
-            data["indices"] = "true"
-        return self.get("chart_data", data)
+            params = {
+                "functionName": "getGraphChart",
+                "type": symbol,
+                "flag": flag,
+            }
+            resp = self.client.get_json("/api/NextApi/apiClient", params=params)
+            # Index response nests data under "data"
+            if isinstance(resp, dict) and "data" in resp:
+                return resp["data"]
+            return resp
+
+        # Equity route
+        identifier = symbol if symbol.endswith("EQN") else f"{symbol}EQN"
+        params = {
+            "functionName": "getSymbolChartData",
+            "symbol": identifier,
+            "days": flag,
+        }
+        return self.client.get_json("/api/NextApi/apiClient/GetQuoteApi", params=params)
     
     @live_cache
-    def tick_data(self, symbol, indices=False):
-        return self.chart_data(symbol, indices)
+    def tick_data(self, symbol, indices=False, flag="1D"):
+        return self.chart_data(symbol, indices, flag)
 
     @live_cache
     def market_turnover(self):
@@ -87,15 +115,37 @@ class NSELive:
         data = {"index" : symbol}
         return self.get("live_index", data)
     
+    def _prime_option_chain(self, indices: bool = True) -> None:
+        """
+        Hit the public option chain page once to establish cookies (NSE anti-bot).
+        """
+        try:
+            path = "/option-chain" if indices else "/option-chain-equities"
+            self.client.get(path)
+        except Exception:
+            # Best-effort priming; downstream calls will retry on failure
+            pass
+
+    def _get_first_expiry(self, symbol: str) -> str:
+        info = self.client.get_json("/api/option-chain-contract-info", params={"symbol": symbol})
+        expiries = info.get("expiryDates") or info.get("records", {}).get("expiryDates") or []
+        if not expiries:
+            raise ValueError(f"No expiries returned for {symbol}")
+        return expiries[0]
+
     @live_cache
     def index_option_chain(self, symbol="NIFTY"):
-        data = {"symbol": symbol}
-        return self.get("index_option_chain", data)
+        self._prime_option_chain(indices=True)
+        expiry = self._get_first_expiry(symbol)
+        params = {"type": "Indices", "symbol": symbol, "expiry": expiry}
+        return self.client.get_json("/api/option-chain-v3", params=params)
 
     @live_cache
     def equities_option_chain(self, symbol):
-        data = {"symbol": symbol}
-        return self.get("equity_option_chain", data)
+        self._prime_option_chain(indices=False)
+        expiry = self._get_first_expiry(symbol)
+        params = {"type": "Stocks", "symbol": symbol, "expiry": expiry}
+        return self.client.get_json("/api/option-chain-v3", params=params)
 
     @live_cache
     def currency_option_chain(self, symbol="USDINR"):

@@ -21,7 +21,7 @@ def test_market_status():
     assert "marketState" in r
 
 def test_tick_data():
-    d = n.tick_data("HDFC")
+    d = n.tick_data("SBIN")
     assert "grapthData" in d
     d = n.tick_data("NIFTY 50", True)
     assert "grapthData" in d

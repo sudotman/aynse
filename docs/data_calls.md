@@ -94,14 +94,14 @@ All return Python dicts parsed from NSE JSON unless noted.
 - stock_quote_fno(symbol: str) -> dict
 - trade_info(symbol: str) -> dict
 - market_status() -> dict
-- chart_data(symbol: str, indices: bool = False) -> dict
-- tick_data(symbol: str, indices: bool = False) -> dict  (alias of chart_data)
+- chart_data(symbol: str, indices: bool = False, flag: str = "1D") -> dict
+- tick_data(symbol: str, indices: bool = False, flag: str = "1D") -> dict  (alias of chart_data)
 - market_turnover() -> dict
 - eq_derivative_turnover(type: str = "allcontracts") -> dict
 - all_indices() -> dict
 - live_index(symbol: str = "NIFTY 50") -> dict
-- index_option_chain(symbol: str = "NIFTY") -> dict
-- equities_option_chain(symbol: str) -> dict
+- index_option_chain(symbol: str = "NIFTY") -> dict  (option-chain-v3, auto-selects first expiry)
+- equities_option_chain(symbol: str) -> dict        (option-chain-v3, auto-selects first expiry)
 - currency_option_chain(symbol: str = "USDINR") -> dict
 - live_fno() -> dict  (alias: live_index("SECURITIES IN F&O"))
 - pre_open_market(key: str = "NIFTY") -> dict
