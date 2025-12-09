@@ -603,10 +603,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#index-option-chain" class="md-nav__link">
+  <a href="#index-option-chain-v3" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Index Option Chain
+        Index Option Chain (v3)
       
     </span>
   </a>
@@ -614,10 +614,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#equity-option-chain" class="md-nav__link">
+  <a href="#equity-option-chain-v3" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Equity Option Chain
+        Equity Option Chain (v3)
       
     </span>
   </a>
@@ -1111,10 +1111,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#index-option-chain" class="md-nav__link">
+  <a href="#index-option-chain-v3" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Index Option Chain
+        Index Option Chain (v3)
       
     </span>
   </a>
@@ -1122,10 +1122,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#equity-option-chain" class="md-nav__link">
+  <a href="#equity-option-chain-v3" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Equity Option Chain
+        Equity Option Chain (v3)
       
     </span>
   </a>
@@ -1472,8 +1472,8 @@
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">market</span><span class="p">[</span><span class="s1">&#39;market&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">market</span><span class="p">[</span><span class="s1">&#39;marketStatus&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <h2 id="option-chains">Option Chains<a class="headerlink" href="#option-chains" title="Permanent link">&para;</a></h2>
-<h3 id="index-option-chain">Index Option Chain<a class="headerlink" href="#index-option-chain" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># NIFTY option chain</span>
+<h3 id="index-option-chain-v3">Index Option Chain (v3)<a class="headerlink" href="#index-option-chain-v3" title="Permanent link">&para;</a></h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># NIFTY option chain (uses option-chain-v3; auto-selects first expiry)</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">chain</span> <span class="o">=</span> <span class="n">live</span><span class="o">.</span><span class="n">index_option_chain</span><span class="p">(</span><span class="s2">&quot;NIFTY&quot;</span><span class="p">)</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="n">records</span> <span class="o">=</span> <span class="n">chain</span><span class="p">[</span><span class="s1">&#39;records&#39;</span><span class="p">]</span>
@@ -1487,8 +1487,8 @@
 </span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>    <span class="n">pe</span> <span class="o">=</span> <span class="n">strike</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;PE&#39;</span><span class="p">,</span> <span class="p">{})</span>
 </span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Strike </span><span class="si">{</span><span class="n">strike</span><span class="p">[</span><span class="s1">&#39;strikePrice&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">: CE OI=</span><span class="si">{</span><span class="n">ce</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;openInterest&#39;</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="si">}</span><span class="s2">, PE OI=</span><span class="si">{</span><span class="n">pe</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;openInterest&#39;</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
-<h3 id="equity-option-chain">Equity Option Chain<a class="headerlink" href="#equity-option-chain" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># RELIANCE option chain</span>
+<h3 id="equity-option-chain-v3">Equity Option Chain (v3)<a class="headerlink" href="#equity-option-chain-v3" title="Permanent link">&para;</a></h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># RELIANCE option chain (uses option-chain-v3; auto-selects first expiry)</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">chain</span> <span class="o">=</span> <span class="n">live</span><span class="o">.</span><span class="n">equities_option_chain</span><span class="p">(</span><span class="s2">&quot;RELIANCE&quot;</span><span class="p">)</span>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="n">records</span> <span class="o">=</span> <span class="n">chain</span><span class="p">[</span><span class="s1">&#39;records&#39;</span><span class="p">]</span>
@@ -1538,13 +1538,17 @@
 </span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">meta</span><span class="p">[</span><span class="s1">&#39;symbol&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">: ₹</span><span class="si">{</span><span class="n">meta</span><span class="p">[</span><span class="s1">&#39;lastPrice&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="n">meta</span><span class="p">[</span><span class="s1">&#39;pChange&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">%)&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <h2 id="charttick-data">Chart/Tick Data<a class="headerlink" href="#charttick-data" title="Permanent link">&para;</a></h2>
-<p>Get intraday tick data for charting:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Stock tick data</span>
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">ticks</span> <span class="o">=</span> <span class="n">live</span><span class="o">.</span><span class="n">tick_data</span><span class="p">(</span><span class="s2">&quot;RELIANCE&quot;</span><span class="p">)</span>
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="n">chart_data</span> <span class="o">=</span> <span class="n">ticks</span><span class="p">[</span><span class="s1">&#39;grapthData&#39;</span><span class="p">]</span>  <span class="c1"># Note: NSE typo in response</span>
+<p>Get intraday tick data for charting. NSE recently shifted these to their NextApi
+endpoints; the client handles the right URL/params for you.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Stock tick data (equity) – uses getSymbolChartData under the hood</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">ticks</span> <span class="o">=</span> <span class="n">live</span><span class="o">.</span><span class="n">tick_data</span><span class="p">(</span><span class="s2">&quot;RELIANCE&quot;</span><span class="p">)</span>          <span class="c1"># default flag=&quot;1D&quot;</span>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="n">chart_data</span> <span class="o">=</span> <span class="n">ticks</span><span class="p">[</span><span class="s1">&#39;grapthData&#39;</span><span class="p">]</span>            <span class="c1"># Note: NSE typo in response</span>
 </span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>
-</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="c1"># Index tick data</span>
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="c1"># Index tick data – uses getGraphChart with flag=&quot;1D&quot;</span>
 </span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="n">index_ticks</span> <span class="o">=</span> <span class="n">live</span><span class="o">.</span><span class="n">tick_data</span><span class="p">(</span><span class="s2">&quot;NIFTY 50&quot;</span><span class="p">,</span> <span class="n">indices</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a>
+</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="c1"># Alternate timeframes (if needed)</span>
+</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a><span class="n">week_ticks</span> <span class="o">=</span> <span class="n">live</span><span class="o">.</span><span class="n">tick_data</span><span class="p">(</span><span class="s2">&quot;RELIANCE&quot;</span><span class="p">,</span> <span class="n">flag</span><span class="o">=</span><span class="s2">&quot;5D&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <h2 id="market-turnover">Market Turnover<a class="headerlink" href="#market-turnover" title="Permanent link">&para;</a></h2>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="n">turnover</span> <span class="o">=</span> <span class="n">live</span><span class="o">.</span><span class="n">market_turnover</span><span class="p">()</span>

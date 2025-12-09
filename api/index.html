@@ -2687,7 +2687,7 @@
 
 
 
-  <div class="doc doc-children">
+<div class="doc doc-children">
 
 
 
@@ -2778,10 +2778,19 @@
 
 
 <a href="#aynse.nse.live.NSELive.chart_data" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">chart_data</span><span class="p">(</span><span class="n">symbol</span><span class="p">,</span> <span class="n">indices</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">chart_data</span><span class="p">(</span><span class="n">symbol</span><span class="p">,</span> <span class="n">indices</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">flag</span><span class="o">=</span><span class="s1">&#39;1D&#39;</span><span class="p">)</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
+
+        <p>Fetch intraday/period graph data.</p>
+<p>NSE moved live chart data to NextApi:
+- Equities: /api/NextApi/apiClient/GetQuoteApi?functionName=getSymbolChartData
+            symbol must be <SYMBOL>EQN (library adds suffix automatically)
+            uses <code>days</code> parameter (e.g., 1D, 5D, 3M)
+- Indices:  /api/NextApi/apiClient?functionName=getGraphChart
+            uses <code>type</code> and <code>flag</code> (e.g., 1D, 5D, 6M)</p>
+<p>We normalize responses so callers still receive a dict with grapthData.</p>
 
 
     </div>
@@ -2796,7 +2805,7 @@
 
 
 <a href="#aynse.nse.live.NSELive.tick_data" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">tick_data</span><span class="p">(</span><span class="n">symbol</span><span class="p">,</span> <span class="n">indices</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">tick_data</span><span class="p">(</span><span class="n">symbol</span><span class="p">,</span> <span class="n">indices</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">flag</span><span class="o">=</span><span class="s1">&#39;1D&#39;</span><span class="p">)</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
@@ -2994,7 +3003,7 @@ with official NSE holiday announcements.</p>
 
 
 
-  <div class="doc doc-children">
+<div class="doc doc-children">
 
 
 
@@ -3528,7 +3537,7 @@ print(rates[0])</p>
 
 
 
-  <div class="doc doc-children">
+<div class="doc doc-children">
 
 
 
@@ -4001,7 +4010,7 @@ for rate in rates:
 
 
 
-  <div class="doc doc-children">
+<div class="doc doc-children">
 
 
 
@@ -4305,7 +4314,7 @@ for rate in rates:
 
 
 
-  <div class="doc doc-children">
+<div class="doc doc-children">
 
 
 
@@ -4362,7 +4371,7 @@ large files that wouldn't fit in memory.</p>
 
 
 
-  <div class="doc doc-children">
+<div class="doc doc-children">
 
 
 
@@ -4825,7 +4834,7 @@ large files that wouldn't fit in memory.</p>
 
 
 
-  <div class="doc doc-children">
+<div class="doc doc-children">
 
 
 

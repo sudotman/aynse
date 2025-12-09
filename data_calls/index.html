@@ -1067,14 +1067,14 @@
 <li>stock_quote_fno(symbol: str) -&gt; dict</li>
 <li>trade_info(symbol: str) -&gt; dict</li>
 <li>market_status() -&gt; dict</li>
-<li>chart_data(symbol: str, indices: bool = False) -&gt; dict</li>
-<li>tick_data(symbol: str, indices: bool = False) -&gt; dict  (alias of chart_data)</li>
+<li>chart_data(symbol: str, indices: bool = False, flag: str = "1D") -&gt; dict</li>
+<li>tick_data(symbol: str, indices: bool = False, flag: str = "1D") -&gt; dict  (alias of chart_data)</li>
 <li>market_turnover() -&gt; dict</li>
 <li>eq_derivative_turnover(type: str = "allcontracts") -&gt; dict</li>
 <li>all_indices() -&gt; dict</li>
 <li>live_index(symbol: str = "NIFTY 50") -&gt; dict</li>
-<li>index_option_chain(symbol: str = "NIFTY") -&gt; dict</li>
-<li>equities_option_chain(symbol: str) -&gt; dict</li>
+<li>index_option_chain(symbol: str = "NIFTY") -&gt; dict  (option-chain-v3, auto-selects first expiry)</li>
+<li>equities_option_chain(symbol: str) -&gt; dict        (option-chain-v3, auto-selects first expiry)</li>
 <li>currency_option_chain(symbol: str = "USDINR") -&gt; dict</li>
 <li>live_fno() -&gt; dict  (alias: live_index("SECURITIES IN F&amp;O"))</li>
 <li>pre_open_market(key: str = "NIFTY") -&gt; dict</li>
