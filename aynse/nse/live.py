@@ -145,7 +145,17 @@ class NSELive:
         self._prime_option_chain(indices=False)
         expiry = self._get_first_expiry(symbol)
         params = {"type": "Stocks", "symbol": symbol, "expiry": expiry}
-        return self.client.get_json("/api/option-chain-v3", params=params)
+        data = self.client.get_json("/api/option-chain-v3", params=params)
+        try:
+            rec = data.get("records", {})
+            options = rec.get("data", [])
+            for row in options:
+                # Normalize expiry field for compatibility with older expectations
+                if "expiryDate" not in row:
+                    row["expiryDate"] = expiry
+        except Exception:
+            pass
+        return data
 
     @live_cache
     def currency_option_chain(self, symbol="USDINR"):
