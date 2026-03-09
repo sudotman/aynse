@@ -782,7 +782,40 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label=" index_pe_df">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#aynse.nse.history.set_stock_history_backend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;set_stock_history_backend
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#aynse.nse.history.get_stock_history_backend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;get_stock_history_backend
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#aynse.nse.history.register_stock_history_provider" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;register_stock_history_provider
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" register_stock_history_provider">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -1830,7 +1863,40 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label=" index_pe_df">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#aynse.nse.history.set_stock_history_backend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;set_stock_history_backend
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#aynse.nse.history.get_stock_history_backend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;get_stock_history_backend
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#aynse.nse.history.register_stock_history_provider" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;register_stock_history_provider
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" register_stock_history_provider">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -2950,6 +3016,76 @@
 
     <div class="doc doc-contents first">
 
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="aynse.nse.history.set_stock_history_backend" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">aynse.nse.history.set_stock_history_backend</span>
+
+
+<a href="#aynse.nse.history.set_stock_history_backend" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">set_stock_history_backend</span><span class="p">(</span><span class="n">backend</span><span class="p">:</span> <span class="n"><span title="str">str</span></span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Set the stock history backend globally for stock_raw/stock_df/stock_csv.</p>
+<p>Backends:
+- auto: try NSE historical API, then fallback to bhavcopy reconstruction
+- nse: use NSE historical API only
+- bhavcopy: use bhavcopy reconstruction only
+- custom: use user-registered provider only</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="aynse.nse.history.get_stock_history_backend" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">aynse.nse.history.get_stock_history_backend</span>
+
+
+<a href="#aynse.nse.history.get_stock_history_backend" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">get_stock_history_backend</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n"><span title="str">str</span></span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Return currently configured global stock history backend.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="aynse.nse.history.register_stock_history_provider" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">aynse.nse.history.register_stock_history_provider</span>
+
+
+<a href="#aynse.nse.history.register_stock_history_provider" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">register_stock_history_provider</span><span class="p">(</span><span class="n">provider</span><span class="p">:</span> <span class="n"><span title="typing.Optional">Optional</span></span><span class="p">[</span><span class="n"><span title="aynse.nse.history.StockHistoryProvider">StockHistoryProvider</span></span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Register a custom stock history provider used when backend is 'custom'.</p>
+
+
+<details class="the-provider-signature-must-be" open>
+  <summary>The provider signature must be</summary>
+  <p>provider(symbol: str, from_date: date, to_date: date, series: str) -&gt; list[dict]</p>
+</details>
 
     </div>
 
@@ -6125,7 +6261,7 @@ break_dates(date(2024, 1, 15), date(2024, 3, 20))
 
 
 <a href="#aynse.util.cached" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">cached</span><span class="p">(</span><span class="n">app_name</span><span class="p">:</span> <span class="n"><span title="str">str</span></span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n"><span title="typing.Callable">Callable</span></span><span class="p">[[</span><span class="n"><span title="aynse.util.F">F</span></span><span class="p">],</span> <span class="n"><span title="aynse.util.F">F</span></span><span class="p">]</span>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">cached</span><span class="p">(</span><span class="n">app_name</span><span class="p">:</span> <span class="n"><span title="str">str</span></span><span class="p">,</span> <span class="n">max_age_seconds</span><span class="p">:</span> <span class="n"><span title="typing.Optional">Optional</span></span><span class="p">[</span><span class="n"><span title="int">int</span></span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n"><span title="typing.Callable">Callable</span></span><span class="p">[[</span><span class="n"><span title="aynse.util.F">F</span></span><span class="p">],</span> <span class="n"><span title="aynse.util.F">F</span></span><span class="p">]</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents first">
@@ -6155,6 +6291,27 @@ cache directory. The cache key is generated from the function arguments.</p>
                   <span class="doc-param-annotation">
                     <b>TYPE:</b>
                       <code><span title="str">str</span></code>
+                  </span>
+              </p>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>max_age_seconds</code>
+            </td>
+            <td class="doc-param-details">
+              <div class="doc-md-description">
+                <p>Optional TTL for cache entries. If set, expired
+cache files are ignored and rebuilt.</p>
+              </div>
+              <p>
+                  <span class="doc-param-annotation">
+                    <b>TYPE:</b>
+                      <code><span title="typing.Optional">Optional</span>[<span title="int">int</span>]</code>
+                  </span>
+                  <span class="doc-param-default">
+                    <b>DEFAULT:</b>
+                      <code>None</code>
                   </span>
               </p>
             </td>

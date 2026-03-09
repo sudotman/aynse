@@ -1058,7 +1058,27 @@
 <li>
 <p>index_pe_df(symbol: str, from_date: date, to_date: date) -&gt; pandas.DataFrame</p>
 </li>
-<li>Typed dataframe from index_pe_raw.</li>
+<li>
+<p>Typed dataframe from index_pe_raw.</p>
+</li>
+<li>
+<p>set_stock_history_backend(backend: str) -&gt; None</p>
+</li>
+<li>Set global backend for stock history calls.</li>
+<li>
+<p>Supported values: "auto", "nse", "bhavcopy", "custom".</p>
+</li>
+<li>
+<p>get_stock_history_backend() -&gt; str</p>
+</li>
+<li>
+<p>Get currently configured stock history backend.</p>
+</li>
+<li>
+<p>register_stock_history_provider(provider: callable | None) -&gt; None</p>
+</li>
+<li>Register/unregister custom provider used when backend is "custom".</li>
+<li>Signature: provider(symbol, from_date, to_date, series) -&gt; list[dict]</li>
 </ul>
 <h2 id="live-aynsenselivenselive">Live (aynse.nse.live.NSELive)<a class="headerlink" href="#live-aynsenselivenselive" title="Permanent link">&para;</a></h2>
 <p>All return Python dicts parsed from NSE JSON unless noted.</p>
