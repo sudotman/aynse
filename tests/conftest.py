@@ -14,6 +14,7 @@ import os
 import json
 import tempfile
 from datetime import date, datetime, timedelta
+from pathlib import Path
 from typing import Any, Dict, Generator, List, Optional
 from unittest.mock import MagicMock, patch
 
@@ -260,4 +261,55 @@ def pytest_configure(config: pytest.Config) -> None:
     config.addinivalue_line(
         "markers", "nse: marks tests as requiring NSE API access"
     )
+    config.addinivalue_line(
+        "markers", "offline: deterministic tests that do not require live network"
+    )
+    config.addinivalue_line(
+        "markers", "live: tests that call live NSE/RBI services"
+    )
+    config.addinivalue_line(
+        "markers", "e2e: end-to-end integration and contract verification tests"
+    )
+
+
+def _is_live_test(nodeid: str) -> bool:
+    """Return True for tests that require live external services."""
+    live_files = {
+        "test_nse.py",
+        "test_nse_live.py",
+        "test_bhav.py",
+        "test_rbi.py",
+        "test_earnings_options_bulk.py",
+    }
+    return Path(nodeid.split("::", 1)[0]).name in live_files
+
+
+def _is_e2e_test(nodeid: str) -> bool:
+    """Return True for end-to-end integration/contract style tests."""
+    e2e_files = {
+        "test_nse.py",
+        "test_nse_live.py",
+        "test_bhav.py",
+        "test_rbi.py",
+        "test_cli.py",
+        "test_earnings_options_bulk.py",
+        "test_e2e_contracts.py",
+    }
+    return Path(nodeid.split("::", 1)[0]).name in e2e_files
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: List[pytest.Item]) -> None:
+    """Auto-apply suite markers to make execution matrix easy to run."""
+    for item in items:
+        nodeid = item.nodeid
+        file_name = Path(nodeid.split("::", 1)[0]).name
+        if _is_live_test(nodeid):
+            item.add_marker(pytest.mark.live)
+        else:
+            item.add_marker(pytest.mark.offline)
+
+        if _is_e2e_test(nodeid):
+            item.add_marker(pytest.mark.e2e)
+        if file_name == "test_earnings_options_bulk.py":
+            item.add_marker(pytest.mark.slow)
 

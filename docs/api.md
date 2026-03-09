@@ -33,12 +33,32 @@ The main module for fetching NSE data.
       show_root_heading: true
       show_source: false
 
+::: aynse.nse.history.derivatives_csv
+    options:
+      show_root_heading: true
+      show_source: false
+
 ::: aynse.nse.history.index_raw
     options:
       show_root_heading: true
       show_source: false
 
 ::: aynse.nse.history.index_df
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: aynse.nse.history.index_csv
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: aynse.nse.history.index_pe_raw
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: aynse.nse.history.index_pe_df
     options:
       show_root_heading: true
       show_source: false
@@ -55,7 +75,57 @@ The main module for fetching NSE data.
       show_root_heading: true
       show_source: false
 
+::: aynse.nse.archives.full_bhavcopy_raw
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: aynse.nse.archives.full_bhavcopy_save
+    options:
+      show_root_heading: true
+      show_source: false
+
 ::: aynse.nse.archives.bhavcopy_fo_raw
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: aynse.nse.archives.bhavcopy_fo_save
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: aynse.nse.archives.bhavcopy_index_raw
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: aynse.nse.archives.bhavcopy_index_save
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: aynse.nse.archives.bulk_deals_raw
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: aynse.nse.archives.bulk_deals_save
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: aynse.nse.archives.index_constituent_raw
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: aynse.nse.archives.index_constituent_save
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: aynse.nse.archives.index_constituent_save_all
     options:
       show_root_heading: true
       show_source: false
@@ -78,14 +148,20 @@ The main module for fetching NSE data.
         - market_status
         - chart_data
         - tick_data
+        - market_turnover
+        - eq_derivative_turnover
         - all_indices
         - live_index
         - index_option_chain
         - equities_option_chain
         - currency_option_chain
+        - live_fno
         - pre_open_market
         - holiday_list
         - corporate_announcements
+        - bulk_equities_option_chain
+        - get_options_around_date
+        - analyze_earnings_options
 
 ## Holidays Module
 

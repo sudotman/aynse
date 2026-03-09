@@ -184,72 +184,74 @@ print(df.head())
 
 ## Bulk Derivatives Operations
 
-For advanced users who need to fetch data for multiple derivatives contracts concurrently, `aynse` provides bulk fetching capabilities through the `NSEHistory` class.
+For advanced users who need to fetch many derivatives contracts concurrently, use the request batcher helpers.
 
 ### Bulk Historical Derivatives Data
 
 ```python
-from datetime import date
-from aynse.nse.history import NSEHistory
-
-# Create NSEHistory instance
-nse_history = NSEHistory()
+from aynse import batch_derivatives_requests
 
 # Define multiple derivatives requests
 requests_list = [
     {
         'symbol': 'RELIANCE',
-        'from_date': date(2024, 1, 1),
-        'to_date': date(2024, 1, 31),
-        'expiry_date': date(2024, 1, 25),
-        'instrument_type': 'FUTSTK'
+        'from_date': '2024-01-01',
+        'to_date': '2024-01-31',
+        'expiry_date': '2024-01-25',
+        'instrument_type': 'FUTSTK',
+        'output': 'reliance_fut.csv',
     },
     {
         'symbol': 'TCS',
-        'from_date': date(2024, 1, 1), 
-        'to_date': date(2024, 1, 31),
-        'expiry_date': date(2024, 1, 25),
-        'instrument_type': 'FUTSTK'
+        'from_date': '2024-01-01',
+        'to_date': '2024-01-31',
+        'expiry_date': '2024-01-25',
+        'instrument_type': 'FUTSTK',
+        'output': 'tcs_fut.csv',
     },
     {
         'symbol': 'NIFTY',
-        'from_date': date(2024, 1, 1),
-        'to_date': date(2024, 1, 31), 
-        'expiry_date': date(2024, 1, 25),
-        'instrument_type': 'FUTIDX'
+        'from_date': '2024-01-01',
+        'to_date': '2024-01-31',
+        'expiry_date': '2024-01-25',
+        'instrument_type': 'OPTIDX',
+        'strike_price': 21000,
+        'option_type': 'CE',
+        'output': 'nifty_opt_ce.csv',
     }
 ]
 
 # Fetch all contracts concurrently
-bulk_results = nse_history.bulk_derivatives_raw(requests_list, max_workers=3)
+results = batch_derivatives_requests(requests_list)
 
 # Process results
-for result in bulk_results:
-    if 'error' in result:
-        print(f"Error for {result['request']['symbol']}: {result['error']}")
+for result in results:
+    if not result.success:
+        print(f"Error: {result.error}")
     else:
-        print(f"Downloaded {len(result['data'])} records for {result['request']['symbol']}")
+        print(f"Saved file: {result.data}")
 ```
 
 ### Historical Options Analysis Around Earnings
 
 ```python
 from datetime import date
-from aynse.nse.history import NSEHistory
+from aynse import derivatives_raw
 
-# Create NSEHistory instance
-nse_history = NSEHistory()
-
-# Analyze options around earnings announcement
-earnings_analysis = nse_history.get_earnings_options_historical(
-    symbol='RELIANCE',
-    earnings_date=date(2024, 1, 19),
+# Example: fetch one strike/side around an earnings date
+earnings_date = date(2024, 1, 19)
+contract_rows = derivatives_raw(
+    symbol="RELIANCE",
+    from_date=date(2024, 1, 18),
+    to_date=date(2024, 1, 22),
     expiry_date=date(2024, 1, 25),
-    strike_prices=[2800, 2850, 2900, 2950, 3000],  # List of strike prices
-    days_around=7  # Days before/after earnings
+    instrument_type="OPTSTK",
+    strike_price=2900,
+    option_type="CE",
 )
+print(f"Rows fetched: {len(contract_rows)}")
 
-print(f"Analyzed {len(earnings_analysis)} strike prices")
-for strike, data in earnings_analysis.items():
-    print(f"Strike {strike}: {len(data['CE'])} CE records, {len(data['PE'])} PE records")
+# For multi-symbol earnings workflows, see live-data helpers:
+# - NSELive.get_options_around_date(...)
+# - NSELive.analyze_earnings_options(...)
 ```

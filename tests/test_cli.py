@@ -1,8 +1,5 @@
-import warnings
-import csv
 from click.testing import CliRunner
 from pyfakefs.fake_filesystem_unittest import TestCase
-from appdirs import user_cache_dir
 from aynse.cli import cli
 
 class TestCli(TestCase):
@@ -21,6 +18,42 @@ class TestCli(TestCase):
         self.fs.create_file(self.path)
         with open(self.path, "w") as fp:
             fp.write(self.certs)
+
+    def test_cli_help(self):
+        """CLI root should render help and list key commands."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--help"])
+        assert result.exit_code == 0
+        assert "aynse - A command line tool" in result.output
+        assert "bhavcopy" in result.output
+        assert "stock" in result.output
+        assert "derivatives" in result.output
+
+    def test_holidays_cli_output(self):
+        """Holidays command should print selected year and summary count."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["holidays", "-y", "2024"])
+        assert result.exit_code == 0
+        assert "Trading holidays for 2024" in result.output
+        assert "Total:" in result.output
+        assert "2024-01-26" in result.output
+
+    def test_derivatives_cli_validates_options_args(self):
+        """Options instrument must provide strike and option side."""
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            [
+                "derivatives",
+                "-s", "NIFTY",
+                "-f", "2024-01-01",
+                "-t", "2024-01-05",
+                "-e", "2024-01-25",
+                "-i", "OPTIDX",
+            ],
+        )
+        assert result.exit_code != 0
+        assert "Strike price" in result.output
 
     # def test_stock_cli(self):
     #     symbol = "RELIANCE"

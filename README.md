@@ -133,6 +133,9 @@ aynse bhavcopy -d /path/to/directory --fo
 
 # Download index bhavcopy
 aynse bhavcopy -d /path/to/directory --idx
+
+# Download full bhavcopy (includes delivery info)
+aynse bhavcopy -d /path/to/directory --full
 ```
 
 ### download historical stock data
@@ -245,8 +248,12 @@ total_volume = processor.process_csv_file(
 | `stock_csv(symbol, from_date, to_date, series="EQ", output="")` | save stock data to csv |
 | `derivatives_raw(...)` | get raw derivatives data |
 | `derivatives_df(...)` | get derivatives data as dataframe |
+| `derivatives_csv(...)` | save derivatives data to csv |
 | `index_raw(symbol, from_date, to_date)` | get raw index data |
 | `index_df(symbol, from_date, to_date)` | get index data as dataframe |
+| `index_csv(symbol, from_date, to_date, output="")` | save index data to csv |
+| `index_pe_raw(symbol, from_date, to_date)` | get index pe/pb/dividend payload |
+| `index_pe_df(symbol, from_date, to_date)` | get index pe/pb/dividend data as dataframe |
 
 ### archives (`aynse.nse`)
 
@@ -254,9 +261,18 @@ total_volume = processor.process_csv_file(
 |----------|-------------|
 | `bhavcopy_raw(dt)` | get equity bhavcopy as csv string |
 | `bhavcopy_save(dt, dest)` | save equity bhavcopy to file |
+| `full_bhavcopy_raw(dt)` | get full equity bhavcopy (with delivery info) |
+| `full_bhavcopy_save(dt, dest)` | save full equity bhavcopy to file |
 | `bhavcopy_fo_raw(dt)` | get f&o bhavcopy |
 | `bhavcopy_fo_save(dt, dest)` | save f&o bhavcopy |
-| `expiry_dates(dt, instrument_type, symbol)` | calculate expiry dates |
+| `bhavcopy_index_raw(dt)` | get index bhavcopy as csv string |
+| `bhavcopy_index_save(dt, dest)` | save index bhavcopy to file |
+| `bulk_deals_raw(from_date, to_date)` | get bulk deals json in date range |
+| `bulk_deals_save(from_date, to_date, dest)` | save bulk deals json to file |
+| `index_constituent_raw(index_type)` | get index constituents csv string |
+| `index_constituent_save(index_type, dest)` | save index constituents csv to file |
+| `index_constituent_save_all(dest)` | save all supported index constituent files |
+| `expiry_dates(dt, instrument_type="", symbol="", contracts=0, months_ahead=6)` | calculate contract expiry dates |
 
 ### live data (`NSELive`)
 
@@ -264,12 +280,24 @@ total_volume = processor.process_csv_file(
 |--------|-------------|
 | `stock_quote(symbol)` | get live stock quote |
 | `stock_quote_fno(symbol)` | get f&o quote for stock |
+| `trade_info(symbol)` | get detailed trade and order-book info |
+| `tick_data(symbol, indices=False, flag="1D")` | get chart/tick data |
+| `chart_data(symbol, indices=False, flag="1D")` | alias for tick/chart response |
+| `market_turnover()` | get market turnover payload |
+| `eq_derivative_turnover(type="allcontracts")` | get equity derivative turnover |
 | `index_option_chain(symbol)` | get index option chain |
 | `equities_option_chain(symbol)` | get equity option chain |
+| `currency_option_chain(symbol="USDINR")` | get currency option chain |
 | `market_status()` | get market status |
 | `all_indices()` | get all indices data |
 | `live_index(symbol)` | get live index data |
+| `live_fno()` | get securities in f&o snapshot |
 | `pre_open_market(key)` | get pre-open market data |
+| `holiday_list()` | get nse holiday payload by segment |
+| `corporate_announcements(...)` | get filtered corporate announcements |
+| `bulk_equities_option_chain(symbols, max_workers=3)` | fetch many option chains concurrently |
+| `get_options_around_date(symbol, target_date, ...)` | analyze options around a target date |
+| `analyze_earnings_options(symbols_and_dates, ...)` | run bulk earnings options analysis |
 
 ### holidays (`aynse.holidays`)
 
@@ -279,6 +307,7 @@ total_volume = processor.process_csv_file(
 | `is_holiday(dt)` | check if date is a holiday |
 | `is_trading_day(dt)` | check if date is a trading day |
 | `get_trading_days(from_date, to_date)` | get trading days in range |
+| `count_trading_days(from_date, to_date)` | count trading days in range |
 
 ## etymology / musings
 
@@ -301,6 +330,22 @@ contributions are welcome! please:
 5. submit a pull request
 
 for bugs or feature requests, please open an issue on the [github repository](https://github.com/sudotman/aynse/issues).
+
+### test command matrix
+
+```sh
+# deterministic/offline checks only
+pytest -m offline -v --tb=short
+
+# live NSE/RBI integration checks
+pytest -m live -v --tb=short
+
+# end-to-end contract and integration checks
+pytest -m e2e -v --tb=short
+
+# full suite (offline + live)
+pytest tests -v --tb=short
+```
 
 ## release workflow
 1. make your changes

@@ -21,7 +21,7 @@ import click
 import requests
 
 from aynse import nse
-from aynse import holidays as hol
+from aynse.holidays import holidays as list_holidays
 from aynse.rbi import RBI
 
 # Configure logging
@@ -568,7 +568,7 @@ def holidays_command(year: Optional[int]) -> None:
     if year is None:
         year = date.today().year
     
-    holiday_list = hol.holidays(year=year)
+    holiday_list = list_holidays(year=year)
     
     if not holiday_list:
         click.echo(f"No holiday data available for {year}")
