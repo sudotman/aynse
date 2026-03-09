@@ -253,7 +253,7 @@ def kw_to_fname(**kwargs: Any) -> str:
     )
 
 
-def cached(app_name: str) -> Callable[[F], F]:
+def cached(app_name: str, max_age_seconds: Optional[int] = None) -> Callable[[F], F]:
     """
     Decorator for caching function results to disk.
     
@@ -262,6 +262,8 @@ def cached(app_name: str) -> Callable[[F], F]:
     
     Args:
         app_name: Name of the application (used for cache directory)
+        max_age_seconds: Optional TTL for cache entries. If set, expired
+            cache files are ignored and rebuilt.
         
     Returns:
         Decorator function
@@ -295,6 +297,17 @@ def cached(app_name: str) -> Callable[[F], F]:
             cache_path = os.path.join(cache_dir, f"{CACHE_VERSION}__{file_name}.gz")
 
             with cache_lock:
+                if os.path.isfile(cache_path):
+                    # Optional cache expiry based on file mtime
+                    if max_age_seconds is not None:
+                        try:
+                            cache_age = time.time() - os.path.getmtime(cache_path)
+                            if cache_age > max_age_seconds:
+                                os.remove(cache_path)
+                        except OSError:
+                            # If mtime/read/delete fails, continue and try read path
+                            pass
+
                 if os.path.isfile(cache_path):
                     # Try to read from cache
                     try:

@@ -237,6 +237,42 @@ total_volume = processor.process_csv_file(
 )
 ```
 
+### stock history backend configuration
+
+`stock_raw`/`stock_df`/`stock_csv` support configurable backends:
+
+- `auto` (default): try NSE historical endpoint, fallback to bhavcopy reconstruction
+- `nse`: NSE historical endpoint only
+- `bhavcopy`: bhavcopy-only reconstruction
+- `custom`: user-registered provider (for broker/internal APIs)
+
+```python
+from aynse import (
+    set_stock_history_backend,
+    get_stock_history_backend,
+    register_stock_history_provider,
+)
+
+# Global backend selection
+set_stock_history_backend("bhavcopy")
+print(get_stock_history_backend())  # bhavcopy
+
+# Optional custom provider
+def my_provider(symbol, from_date, to_date, series):
+    # Return list[dict] in stock_raw schema
+    return []
+
+register_stock_history_provider(my_provider)
+set_stock_history_backend("custom")
+```
+
+You can also set backend using environment variable:
+
+```sh
+# auto | nse | bhavcopy | custom
+export AYNSE_STOCK_HISTORY_BACKEND=bhavcopy
+```
+
 ## api reference
 
 ### historical data (`aynse.nse`)
@@ -254,6 +290,9 @@ total_volume = processor.process_csv_file(
 | `index_csv(symbol, from_date, to_date, output="")` | save index data to csv |
 | `index_pe_raw(symbol, from_date, to_date)` | get index pe/pb/dividend payload |
 | `index_pe_df(symbol, from_date, to_date)` | get index pe/pb/dividend data as dataframe |
+| `set_stock_history_backend(backend)` | configure stock history backend globally |
+| `get_stock_history_backend()` | get current stock history backend |
+| `register_stock_history_provider(provider)` | register custom stock history provider |
 
 ### archives (`aynse.nse`)
 

@@ -63,6 +63,21 @@ The main module for fetching NSE data.
       show_root_heading: true
       show_source: false
 
+::: aynse.nse.history.set_stock_history_backend
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: aynse.nse.history.get_stock_history_backend
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: aynse.nse.history.register_stock_history_provider
+    options:
+      show_root_heading: true
+      show_source: false
+
 ### Archives
 
 ::: aynse.nse.archives.bhavcopy_raw

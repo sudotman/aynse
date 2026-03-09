@@ -86,6 +86,17 @@ Brief, canonical reference for all public data calls. Return types are noted suc
 - index_pe_df(symbol: str, from_date: date, to_date: date) -> pandas.DataFrame
   - Typed dataframe from index_pe_raw.
 
+- set_stock_history_backend(backend: str) -> None
+  - Set global backend for stock history calls.
+  - Supported values: "auto", "nse", "bhavcopy", "custom".
+
+- get_stock_history_backend() -> str
+  - Get currently configured stock history backend.
+
+- register_stock_history_provider(provider: callable | None) -> None
+  - Register/unregister custom provider used when backend is "custom".
+  - Signature: provider(symbol, from_date, to_date, series) -> list[dict]
+
 ## Live (aynse.nse.live.NSELive)
 
 All return Python dicts parsed from NSE JSON unless noted.

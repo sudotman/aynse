@@ -93,6 +93,10 @@ def demo_crash(a, b):
 def demo_crashed(a, b):
     raise Exception("Terrible")
 
+@ut.cached("testapp_ttl", max_age_seconds=1)
+def demo_function_ttl(self, x, y):
+    return {'x': x, 'y': y}
+
 class TestCache(TestCase):
     def setUp(self):
         self.setUpPyfakefs()
@@ -168,6 +172,27 @@ class TestCache(TestCase):
         # run the function
         x = demo_function([0], 'v1', 'v2')
         self.assertEqual(x, j)
+
+    def test_cached_ttl_rebuilds_expired_entry(self):
+        x = demo_function_ttl([0], 'v1', 'v2')
+        self.assertEqual(x, {'x': 'v1', 'y': 'v2'})
+
+        ttl_cache_dir = os.path.join('/fakecache', 'testapp_ttl', 'testapp_ttl')
+        path = os.path.join(ttl_cache_dir, 'v1__v1-v2.gz')
+        self.assertTrue(os.path.isfile(path))
+
+        # Corrupt cached payload to prove fresh rebuild happens after expiry
+        stale = {'x': 'stale', 'y': 'stale'}
+        import gzip
+        with gzip.open(path, 'wb') as fp:
+            pickle.dump(stale, fp)
+
+        # Expire cache by forcing old mtime
+        old = time.time() - 120
+        os.utime(path, (old, old))
+
+        refreshed = demo_function_ttl([0], 'v1', 'v2')
+        self.assertEqual(refreshed, {'x': 'v1', 'y': 'v2'})
 
 class QuoteApp:
     time_out = 3

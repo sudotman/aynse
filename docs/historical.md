@@ -69,6 +69,36 @@ stock_csv(symbol="RELIANCE", from_date=date(2024, 1, 1),
           to_date=date(2024, 1, 31), series="EQ", output="/path/to/file.csv")
 ```
 
+### Configure Stock Data Backend
+
+You can select how `stock_raw`/`stock_df`/`stock_csv` fetch historical stock data.
+
+```python
+from aynse import (
+    set_stock_history_backend,
+    get_stock_history_backend,
+    register_stock_history_provider,
+)
+
+# Built-in backends: auto | nse | bhavcopy | custom
+set_stock_history_backend("auto")
+print(get_stock_history_backend())
+
+# Optional custom backend (broker/internal API)
+def custom_provider(symbol, from_date, to_date, series):
+    # Return list[dict] compatible with stock_raw schema
+    return []
+
+register_stock_history_provider(custom_provider)
+set_stock_history_backend("custom")
+```
+
+Environment variable (read at import time):
+
+```bash
+export AYNSE_STOCK_HISTORY_BACKEND=bhavcopy
+```
+
 ## Tips
 - Large ranges are chunked month-by-month for reliability
 - Retries with backoff are applied under the hood

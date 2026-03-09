@@ -16,7 +16,8 @@ import json
 import itertools
 import csv
 import logging
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from datetime import date, datetime, timedelta
+from typing import Any, Callable, Dict, List, Optional, TYPE_CHECKING
 
 import httpx
 import click
@@ -48,6 +49,53 @@ from .archives import (
 )
 
 APP_NAME = "nsehistory"
+StockHistoryProvider = Callable[[str, date, date, str], List[Dict[str, Any]]]
+_VALID_STOCK_BACKENDS = {"auto", "nse", "bhavcopy", "custom"}
+_stock_history_backend = os.environ.get("AYNSE_STOCK_HISTORY_BACKEND", "auto").strip().lower()
+if _stock_history_backend not in _VALID_STOCK_BACKENDS:
+    _stock_history_backend = "auto"
+_stock_history_provider: Optional[StockHistoryProvider] = None
+
+
+def set_stock_history_backend(backend: str) -> None:
+    """
+    Set the stock history backend globally for stock_raw/stock_df/stock_csv.
+
+    Backends:
+    - auto: try NSE historical API, then fallback to bhavcopy reconstruction
+    - nse: use NSE historical API only
+    - bhavcopy: use bhavcopy reconstruction only
+    - custom: use user-registered provider only
+    """
+    global _stock_history_backend
+    normalized = backend.strip().lower()
+    if normalized not in _VALID_STOCK_BACKENDS:
+        raise ValueError(
+            f"Invalid backend '{backend}'. Must be one of {sorted(_VALID_STOCK_BACKENDS)}"
+        )
+    _stock_history_backend = normalized
+
+
+def get_stock_history_backend() -> str:
+    """Return currently configured global stock history backend."""
+    return _stock_history_backend
+
+
+def register_stock_history_provider(
+    provider: Optional[StockHistoryProvider],
+) -> None:
+    """
+    Register a custom stock history provider used when backend is 'custom'.
+
+    The provider signature must be:
+        provider(symbol: str, from_date: date, to_date: date, series: str) -> list[dict]
+    """
+    global _stock_history_provider
+    if provider is not None and not callable(provider):
+        raise TypeError("provider must be callable or None")
+    _stock_history_provider = provider
+
+
 class NSEHistory:
     def __init__(self):
 
@@ -61,12 +109,48 @@ class NSEHistory:
         self.workers = 2
         self.use_threads = True
         self.show_progress = False
+        # Optional instance override. If None, use global backend selection.
+        self.stock_history_backend: Optional[str] = None
 
         # Centralized HTTP client via connection pool
         self.connection_pool = get_connection_pool()
         self.client: NSEHttpClient = self.connection_pool.get_client(self.base_url)
 
         self.ssl_verify = True
+
+    def _resolved_stock_backend(self) -> str:
+        backend = (self.stock_history_backend or _stock_history_backend).strip().lower()
+        if backend not in _VALID_STOCK_BACKENDS:
+            raise ValueError(
+                f"Invalid stock history backend '{backend}'. "
+                f"Must be one of {sorted(_VALID_STOCK_BACKENDS)}"
+            )
+        return backend
+
+    def _stock_from_nse_api(self, symbol: str, from_date: date, to_date: date, series: str) -> List[Dict[str, Any]]:
+        date_ranges = ut.break_dates(from_date, to_date)
+        params = [(symbol, x[0], x[1], series) for x in reversed(date_ranges)]
+
+        # Show progress if requested
+        if self.show_progress:
+            print(f"Fetching stock data for {symbol} from {from_date} to {to_date} ({len(params)} requests)")
+
+        # Use optimized pool function with better error handling
+        chunks = ut.pool(self._stock, params, max_workers=self.workers)
+        valid_chunks = [chunk for chunk in chunks if chunk is not None]
+
+        # If some chunk calls failed transiently, retry those once sequentially.
+        if len(valid_chunks) < len(chunks):
+            for chunk, param in zip(chunks, params):
+                if chunk is None:
+                    try:
+                        retried = self._stock(*param)
+                        if retried is not None:
+                            valid_chunks.append(retried)
+                    except Exception:
+                        continue
+
+        return list(itertools.chain.from_iterable(valid_chunks))
 
     def _get(self, path_name, params):
         """Make API request using centralized client"""
@@ -116,7 +200,8 @@ class NSEHistory:
             self.r = client.get(path, params=params)
         return self.r
     
-    @ut.cached(APP_NAME + '-stock')
+    # Historical windows near "now" can change intra-day; keep cache fresh.
+    @ut.cached(APP_NAME + '-stock', max_age_seconds=6 * 60 * 60)
     def _stock(self, symbol, from_date, to_date, series="EQ"):
         params = {
             'symbol': symbol,
@@ -127,9 +212,77 @@ class NSEHistory:
         self.r = self._get("stock_history", params)
         j = self.r.json()
         return j['data']
+
+    def _parse_bhavcopy_date(self, value: str) -> Optional[date]:
+        """Parse bhavcopy timestamp in known NSE formats."""
+        if not value:
+            return None
+        for fmt in ("%d-%b-%Y", "%d-%m-%Y", "%Y-%m-%d"):
+            try:
+                return datetime.strptime(value, fmt).date()
+            except ValueError:
+                continue
+        return None
+
+    def _stock_row_from_bhavcopy(self, row: Dict[str, Any], fallback_dt: date) -> Dict[str, Any]:
+        """Normalize a bhavcopy CSV row to stock_history schema."""
+        parsed_dt = self._parse_bhavcopy_date(str(row.get("TIMESTAMP", ""))) or fallback_dt
+        return {
+            "CH_TIMESTAMP": parsed_dt.strftime("%Y-%m-%d"),
+            "CH_SERIES": row.get("SERIES", ""),
+            "CH_OPENING_PRICE": row.get("OPEN"),
+            "CH_TRADE_HIGH_PRICE": row.get("HIGH"),
+            "CH_TRADE_LOW_PRICE": row.get("LOW"),
+            "CH_PREVIOUS_CLS_PRICE": row.get("PREVCLOSE"),
+            "CH_LAST_TRADED_PRICE": row.get("LAST") or row.get("CLOSE"),
+            "CH_CLOSING_PRICE": row.get("CLOSE"),
+            "VWAP": row.get("VWAP"),
+            "CH_52WEEK_HIGH_PRICE": row.get("52WH"),
+            "CH_52WEEK_LOW_PRICE": row.get("52WL"),
+            "CH_TOT_TRADED_QTY": row.get("TOTTRDQTY") or row.get("VOLUME"),
+            "CH_TOT_TRADED_VAL": row.get("TOTTRDVAL") or row.get("VALUE"),
+            "CH_TOTAL_TRADES": row.get("TOTALTRADES") or row.get("NOOFTRADES"),
+            "CH_SYMBOL": row.get("SYMBOL", ""),
+        }
+
+    def _stock_from_bhavcopy(self, symbol: str, from_date: date, to_date: date, series: str = "EQ") -> List[Dict[str, Any]]:
+        """
+        Fallback for historical stock data when NSE historical endpoint is unavailable.
+        Builds rows from daily bhavcopy CSVs.
+        """
+        results: List[Dict[str, Any]] = []
+        current = to_date
+        symbol_u = symbol.upper()
+        series_u = series.upper()
+
+        while current >= from_date:
+            if current.weekday() >= 5:
+                current -= timedelta(days=1)
+                continue
+
+            try:
+                csv_text = bhavcopy_raw(current)
+                reader = csv.DictReader(csv_text.splitlines())
+                match = next(
+                    (
+                        r for r in reader
+                        if str(r.get("SYMBOL", "")).upper() == symbol_u
+                        and str(r.get("SERIES", "")).upper() == series_u
+                    ),
+                    None,
+                )
+                if match:
+                    results.append(self._stock_row_from_bhavcopy(match, current))
+            except Exception:
+                # Missing bhavcopy for holidays/non-trading-days is expected
+                pass
+
+            current -= timedelta(days=1)
+
+        return results
     
     
-    @ut.cached(APP_NAME + '-derivatives')
+    @ut.cached(APP_NAME + '-derivatives', max_age_seconds=6 * 60 * 60)
     def _derivatives(self, symbol, from_date, to_date, expiry_date, instrument_type, strike_price=None, option_type=None):
         valid_instrument_types = ["OPTIDX", "OPTSTK", "FUTIDX", "FUTSTK"]
         if instrument_type not in valid_instrument_types:
@@ -166,21 +319,31 @@ class NSEHistory:
         # Validate inputs
         if from_date > to_date:
             raise ValueError("from_date must be before or equal to to_date")
+        backend = self._resolved_stock_backend()
+        symbol_u = str(symbol).upper()
+        series_u = str(series).upper()
 
-        date_ranges = ut.break_dates(from_date, to_date)
-        params = [(symbol, x[0], x[1], series) for x in reversed(date_ranges)]
+        if backend == "custom":
+            if _stock_history_provider is None:
+                raise RuntimeError(
+                    "Stock backend is 'custom' but no provider is registered. "
+                    "Call register_stock_history_provider(...) first."
+                )
+            return _stock_history_provider(symbol_u, from_date, to_date, series_u)
 
-        # Show progress if requested
-        if self.show_progress:
-            print(f"Fetching stock data for {symbol} from {from_date} to {to_date} ({len(params)} requests)")
+        if backend == "bhavcopy":
+            return self._stock_from_bhavcopy(symbol_u, from_date, to_date, series_u)
 
-        # Use optimized pool function with better error handling
-        chunks = ut.pool(self._stock, params, max_workers=self.workers)
+        # nse/auto: try direct NSE endpoint first.
+        merged = self._stock_from_nse_api(symbol_u, from_date, to_date, series_u)
+        if merged or backend == "nse":
+            return merged
 
-        # Filter out None results from failed requests
-        valid_chunks = [chunk for chunk in chunks if chunk is not None]
+        # auto fallback only
+        if to_date <= date.today():
+            return self._stock_from_bhavcopy(symbol_u, from_date, to_date, series_u)
 
-        return list(itertools.chain.from_iterable(valid_chunks))
+        return []
 
     def derivatives_raw(self, symbol, from_date, to_date, expiry_date, instrument_type, strike_price, option_type):
         """
@@ -209,9 +372,18 @@ class NSEHistory:
             print(f"Fetching derivatives data for {symbol} {instrument_type} from {from_date} to {to_date} ({len(params)} requests)")
 
         chunks = ut.pool(self._derivatives, params, max_workers=self.workers)
-
-        # Filter out None results from failed requests
         valid_chunks = [chunk for chunk in chunks if chunk is not None]
+
+        # If some chunk calls failed transiently, retry those once sequentially.
+        if len(valid_chunks) < len(chunks):
+            for chunk, param in zip(chunks, params):
+                if chunk is None:
+                    try:
+                        retried = self._derivatives(*param)
+                        if retried is not None:
+                            valid_chunks.append(retried)
+                    except Exception:
+                        continue
 
         return list(itertools.chain.from_iterable(valid_chunks))
 
@@ -270,6 +442,8 @@ def stock_df(symbol, from_date, to_date, series="EQ"):
     if not pd:
         raise ModuleNotFoundError("Please install pandas using \n pip install pandas")
     raw = stock_raw(symbol, from_date, to_date, series)
+    if not raw:
+        return pd.DataFrame(columns=stock_final_headers)
     df = pd.DataFrame(raw)[stock_select_headers]
     df.columns = stock_final_headers
     for i, h in enumerate(stock_final_headers):

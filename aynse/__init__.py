@@ -37,6 +37,9 @@ from .nse import (
     index_pe_raw,
     index_pe_df,
     index_csv,
+    set_stock_history_backend,
+    get_stock_history_backend,
+    register_stock_history_provider,
     # Archives functions
     bhavcopy_raw,
     bhavcopy_save,
@@ -99,6 +102,9 @@ __all__ = [
     "index_pe_raw",
     "index_pe_df",
     "index_csv",
+    "set_stock_history_backend",
+    "get_stock_history_backend",
+    "register_stock_history_provider",
     # Archives
     "bhavcopy_raw",
     "bhavcopy_save",
