@@ -2,6 +2,7 @@
     Implements live data fetch functionality
 """
 from datetime import datetime
+from typing import Any, Dict
 from ..util import live_cache
 from .connection_pool import get_connection_pool
 from .http_client import NSEHttpClient
@@ -195,7 +196,7 @@ class NSELive:
             payload['symbol'] = symbol
         return self.get("corporate_announcements", payload)
     
-    def bulk_equities_option_chain(self, symbols, max_workers=3):
+    def bulk_equities_option_chain(self, symbols, max_workers=3) -> Dict[str, Any]:
         """
         Fetch option chains for multiple equity symbols concurrently.
         
@@ -245,7 +246,7 @@ class NSELive:
             }
         }
     
-    def get_options_around_date(self, symbol, target_date, days_before=5, days_after=5):
+    def get_options_around_date(self, symbol, target_date, days_before=5, days_after=5) -> Dict[str, Any]:
         """
         Get option chain data and analyze it in context of a target date (like earnings).
         
@@ -311,7 +312,7 @@ class NSELive:
         except Exception as e:
             return {'error': str(e)}
     
-    def analyze_earnings_options(self, symbols_and_dates, max_workers=3):
+    def analyze_earnings_options(self, symbols_and_dates, max_workers=3) -> Dict[str, Any]:
         """
         Analyze option chains for multiple stocks around their earnings dates.
         
