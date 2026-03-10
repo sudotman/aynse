@@ -131,26 +131,38 @@ class NSEHistory:
         date_ranges = ut.break_dates(from_date, to_date)
         params = [(symbol, x[0], x[1], series) for x in reversed(date_ranges)]
 
-        # Show progress if requested
+        if not params:
+            return []
+
+        # Probe the newest chunk first; if the endpoint is dead/empty we
+        # avoid wasting time (and retries) on all remaining chunks.
+        probe = self._stock(*params[0])
+        if not probe:
+            return []
+
+        if len(params) == 1:
+            return list(probe)
+
         if self.show_progress:
             print(f"Fetching stock data for {symbol} from {from_date} to {to_date} ({len(params)} requests)")
 
-        # Use optimized pool function with better error handling
-        chunks = ut.pool(self._stock, params, max_workers=self.workers)
-        valid_chunks = [chunk for chunk in chunks if chunk is not None]
+        remaining = ut.pool(self._stock, params[1:], max_workers=self.workers)
+        valid = [c for c in remaining if c is not None]
 
-        # If some chunk calls failed transiently, retry those once sequentially.
-        if len(valid_chunks) < len(chunks):
-            for chunk, param in zip(chunks, params):
+        if len(valid) < len(remaining):
+            for chunk, param in zip(remaining, params[1:]):
                 if chunk is None:
                     try:
                         retried = self._stock(*param)
                         if retried is not None:
-                            valid_chunks.append(retried)
+                            valid.append(retried)
                     except Exception:
                         continue
 
-        return list(itertools.chain.from_iterable(valid_chunks))
+        merged = list(probe)
+        for c in valid:
+            merged.extend(c)
+        return merged
 
     def _get(self, path_name, params):
         """Make API request using centralized client"""
@@ -209,9 +221,16 @@ class NSEHistory:
             'to': to_date.strftime('%d-%m-%Y'),
             'series': '["{}"]'.format(series),
         }
-        self.r = self._get("stock_history", params)
-        j = self.r.json()
-        return j['data']
+        try:
+            self.r = self._get("stock_history", params)
+            j = self.r.json()
+            return j['data']
+        except Exception as exc:
+            logger.warning(
+                "NSE stock history chunk failed (%s %s\u2013%s): %s",
+                symbol, from_date, to_date, exc,
+            )
+            return []
 
     def _parse_bhavcopy_date(self, value: str) -> Optional[date]:
         """Parse bhavcopy timestamp in known NSE formats."""
@@ -225,61 +244,91 @@ class NSEHistory:
         return None
 
     def _stock_row_from_bhavcopy(self, row: Dict[str, Any], fallback_dt: date) -> Dict[str, Any]:
-        """Normalize a bhavcopy CSV row to stock_history schema."""
-        parsed_dt = self._parse_bhavcopy_date(str(row.get("TIMESTAMP", ""))) or fallback_dt
+        """Normalize a bhavcopy CSV row to stock_history schema.
+
+        Handles both old-format (OPEN, HIGH, …) and full-bhavcopy
+        (OPEN_PRICE, HIGH_PRICE, …) column names.
+        """
+        ts_raw = row.get("TIMESTAMP") or row.get("DATE1", "")
+        parsed_dt = self._parse_bhavcopy_date(str(ts_raw).strip()) or fallback_dt
         return {
             "CH_TIMESTAMP": parsed_dt.strftime("%Y-%m-%d"),
-            "CH_SERIES": row.get("SERIES", ""),
-            "CH_OPENING_PRICE": row.get("OPEN"),
-            "CH_TRADE_HIGH_PRICE": row.get("HIGH"),
-            "CH_TRADE_LOW_PRICE": row.get("LOW"),
-            "CH_PREVIOUS_CLS_PRICE": row.get("PREVCLOSE"),
-            "CH_LAST_TRADED_PRICE": row.get("LAST") or row.get("CLOSE"),
-            "CH_CLOSING_PRICE": row.get("CLOSE"),
-            "VWAP": row.get("VWAP"),
+            "CH_SERIES": str(row.get("SERIES", "")).strip(),
+            "CH_OPENING_PRICE": row.get("OPEN") or row.get("OPEN_PRICE"),
+            "CH_TRADE_HIGH_PRICE": row.get("HIGH") or row.get("HIGH_PRICE"),
+            "CH_TRADE_LOW_PRICE": row.get("LOW") or row.get("LOW_PRICE"),
+            "CH_PREVIOUS_CLS_PRICE": row.get("PREVCLOSE") or row.get("PREV_CLOSE"),
+            "CH_LAST_TRADED_PRICE": (
+                row.get("LAST") or row.get("LAST_PRICE")
+                or row.get("CLOSE") or row.get("CLOSE_PRICE")
+            ),
+            "CH_CLOSING_PRICE": row.get("CLOSE") or row.get("CLOSE_PRICE"),
+            "VWAP": row.get("VWAP") or row.get("AVG_PRICE"),
             "CH_52WEEK_HIGH_PRICE": row.get("52WH"),
             "CH_52WEEK_LOW_PRICE": row.get("52WL"),
-            "CH_TOT_TRADED_QTY": row.get("TOTTRDQTY") or row.get("VOLUME"),
-            "CH_TOT_TRADED_VAL": row.get("TOTTRDVAL") or row.get("VALUE"),
-            "CH_TOTAL_TRADES": row.get("TOTALTRADES") or row.get("NOOFTRADES"),
-            "CH_SYMBOL": row.get("SYMBOL", ""),
+            "CH_TOT_TRADED_QTY": (
+                row.get("TOTTRDQTY") or row.get("VOLUME")
+                or row.get("TTL_TRD_QNTY")
+            ),
+            "CH_TOT_TRADED_VAL": (
+                row.get("TOTTRDVAL") or row.get("VALUE")
+                or row.get("TURNOVER_LACS")
+            ),
+            "CH_TOTAL_TRADES": (
+                row.get("TOTALTRADES") or row.get("NOOFTRADES")
+                or row.get("NO_OF_TRADES")
+            ),
+            "CH_SYMBOL": str(row.get("SYMBOL", "")).strip(),
         }
 
+    def _fetch_bhavcopy_for_symbol(self, dt: date, symbol: str, series: str) -> Optional[Dict[str, Any]]:
+        """Extract one symbol's row from a single day's full bhavcopy."""
+        try:
+            csv_text = full_bhavcopy_raw(dt)
+            reader = csv.DictReader(csv_text.splitlines())
+            for raw_row in reader:
+                row = {k.strip(): v.strip() for k, v in raw_row.items()}
+                if (
+                    row.get("SYMBOL", "").upper() == symbol
+                    and row.get("SERIES", "").upper() == series
+                ):
+                    return self._stock_row_from_bhavcopy(row, dt)
+        except Exception:
+            pass
+        return None
+
+    @ut.cached(APP_NAME + '-bhavcopy-stock', max_age_seconds=6 * 60 * 60)
     def _stock_from_bhavcopy(self, symbol: str, from_date: date, to_date: date, series: str = "EQ") -> List[Dict[str, Any]]:
         """
-        Fallback for historical stock data when NSE historical endpoint is unavailable.
-        Builds rows from daily bhavcopy CSVs.
+        Fallback for historical stock data when NSE historical endpoint is
+        unavailable.  Downloads daily bhavcopy CSVs **in parallel** and
+        extracts the requested symbol's rows.
         """
-        results: List[Dict[str, Any]] = []
-        current = to_date
-        symbol_u = symbol.upper()
-        series_u = series.upper()
+        dates: List[date] = []
+        current = from_date
+        while current <= to_date:
+            if current.weekday() < 5:
+                dates.append(current)
+            current += timedelta(days=1)
 
-        while current >= from_date:
-            if current.weekday() >= 5:
-                current -= timedelta(days=1)
-                continue
+        if not dates:
+            return []
 
-            try:
-                csv_text = bhavcopy_raw(current)
-                reader = csv.DictReader(csv_text.splitlines())
-                match = next(
-                    (
-                        r for r in reader
-                        if str(r.get("SYMBOL", "")).upper() == symbol_u
-                        and str(r.get("SERIES", "")).upper() == series_u
-                    ),
-                    None,
-                )
-                if match:
-                    results.append(self._stock_row_from_bhavcopy(match, current))
-            except Exception:
-                # Missing bhavcopy for holidays/non-trading-days is expected
-                pass
+        logger.info(
+            "Reconstructing %s history from %d daily bhavcopies (%s to %s)",
+            symbol, len(dates), from_date, to_date,
+        )
 
-            current -= timedelta(days=1)
+        params = [(dt, symbol, series) for dt in dates]
+        raw_results = ut.pool(
+            self._fetch_bhavcopy_for_symbol,
+            params,
+            max_workers=4,
+        )
 
-        return results
+        rows: List[Dict[str, Any]] = [r for r in raw_results if r is not None]
+        rows.sort(key=lambda r: r["CH_TIMESTAMP"], reverse=True)
+        return rows
     
     
     @ut.cached(APP_NAME + '-derivatives', max_age_seconds=6 * 60 * 60)
