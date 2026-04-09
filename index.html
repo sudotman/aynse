@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.4">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
     
     
       
@@ -472,6 +472,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#metadata-and-analytics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Metadata And Analytics
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#cli-usage" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -873,6 +884,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#metadata-and-analytics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Metadata And Analytics
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#cli-usage" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -944,25 +966,25 @@
 
 
 <h1 id="aynse">aynse<a class="headerlink" href="#aynse" title="Permanent link">&para;</a></h1>
-<p>A lean, modern Python library for fetching data from the National Stock Exchange (NSE) of India.</p>
+<p>A standardized Python library for working with National Stock Exchange (NSE) and RBI datasets in a predictable <code>records / dataframe / save</code> style.</p>
 <div class="grid cards">
 <ul>
 <li>
 <p><span class="twemoji lg middle"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m16 11.78 4.24-7.33 1.73 1-5.23 9.05-6.51-3.75L5.46 19H22v2H2V3h2v14.54L9.5 8z"/></svg></span> <strong>Historical Data</strong></p>
 <hr />
-<p>Download OHLCV data for stocks, indices, and derivatives with automatic retry and caching.</p>
+<p>Download canonical OHLCV-style records for stocks, indices, and derivatives with automatic retry and caching.</p>
 <p><a href="historical/"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13.22 19.03a.75.75 0 0 1 0-1.06L18.19 13H3.75a.75.75 0 0 1 0-1.5h14.44l-4.97-4.97a.749.749 0 0 1 .326-1.275.75.75 0 0 1 .734.215l6.25 6.25a.75.75 0 0 1 0 1.06l-6.25 6.25a.75.75 0 0 1-1.06 0"/></svg></span> Historical Data</a></p>
 </li>
 <li>
 <p><span class="twemoji lg middle"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M11 15H6l7-14v8h5l-7 14z"/></svg></span> <strong>Live Quotes</strong></p>
 <hr />
-<p>Real-time stock quotes, option chains, market status, and more.</p>
+<p>Real-time quotes, option chains, market status, corporate events, and standardized live summaries.</p>
 <p><a href="live/"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13.22 19.03a.75.75 0 0 1 0-1.06L18.19 13H3.75a.75.75 0 0 1 0-1.5h14.44l-4.97-4.97a.749.749 0 0 1 .326-1.275.75.75 0 0 1 .734.215l6.25 6.25a.75.75 0 0 1 0 1.06l-6.25 6.25a.75.75 0 0 1-1.06 0"/></svg></span> Live Data</a></p>
 </li>
 <li>
 <p><span class="twemoji lg middle"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M5 20h14v-2H5m14-9h-4V3H9v6H5l7 7z"/></svg></span> <strong>Bhavcopy</strong></p>
 <hr />
-<p>Download daily bhavcopies for equity, F&amp;O, and indices.</p>
+<p>Work with bhavcopy and archive datasets as records, dataframes, or saved files.</p>
 <p><a href="historical/#download-bhavcopies"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13.22 19.03a.75.75 0 0 1 0-1.06L18.19 13H3.75a.75.75 0 0 1 0-1.5h14.44l-4.97-4.97a.749.749 0 0 1 .326-1.275.75.75 0 0 1 .734.215l6.25 6.25a.75.75 0 0 1 0 1.06l-6.25 6.25a.75.75 0 0 1-1.06 0"/></svg></span> Historical Data</a></p>
 </li>
 <li>
@@ -975,14 +997,16 @@
 </div>
 <h2 id="features">Features<a class="headerlink" href="#features" title="Permanent link">&para;</a></h2>
 <ul>
+<li><strong>Standardized contracts:</strong> canonical Python-native records across history, archives, live, holidays, and RBI</li>
 <li><strong>Historical data:</strong> stocks, indices, derivatives (F&amp;O)</li>
-<li><strong>Bhavcopy:</strong> equity, F&amp;O, index downloads</li>
-<li><strong>Live market data:</strong> real-time quotes, option chains</li>
+<li><strong>Archives:</strong> bhavcopy, bulk deals, index constituents, and dataframe/save helpers</li>
+<li><strong>Live market data:</strong> real-time quotes, option chains, corporate announcements, actions, and results calendars</li>
 <li><strong>CLI:</strong> simple commands for quick downloads</li>
 <li><strong>Resilient networking:</strong> HTTP/2, connection pooling, retries with exponential backoff</li>
 <li><strong>Rate limiting:</strong> token bucket algorithm prevents API throttling</li>
 <li><strong>Circuit breaker:</strong> automatic failure detection and recovery</li>
 <li><strong>Batching &amp; streaming:</strong> adaptive concurrency and low-memory processing</li>
+<li><strong>Metadata &amp; analytics:</strong> supported dataset discovery, option chain summaries, returns, drawdowns, and event-window helpers</li>
 <li><strong>Comprehensive type hints:</strong> full typing support for IDE autocomplete</li>
 </ul>
 <h2 id="installation">Installation<a class="headerlink" href="#installation" title="Permanent link">&para;</a></h2>
@@ -1004,7 +1028,7 @@
 </span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>    <span class="n">from_date</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2024</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
 </span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>    <span class="n">to_date</span><span class="o">=</span><span class="n">date</span><span class="p">(</span><span class="mi">2024</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">31</span><span class="p">)</span>
 </span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="p">)</span>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="nb">print</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">head</span><span class="p">())</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="nb">print</span><span class="p">(</span><span class="n">df</span><span class="p">[[</span><span class="s2">&quot;date&quot;</span><span class="p">,</span> <span class="s2">&quot;symbol&quot;</span><span class="p">,</span> <span class="s2">&quot;open&quot;</span><span class="p">,</span> <span class="s2">&quot;close&quot;</span><span class="p">]]</span><span class="o">.</span><span class="n">head</span><span class="p">())</span>
 </span></code></pre></div>
 <h3 id="get-live-stock-quote">Get Live Stock Quote<a class="headerlink" href="#get-live-stock-quote" title="Permanent link">&para;</a></h3>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">aynse</span><span class="w"> </span><span class="kn">import</span> <span class="n">NSELive</span>
@@ -1012,8 +1036,9 @@
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">live</span> <span class="o">=</span> <span class="n">NSELive</span><span class="p">()</span>
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="n">quote</span> <span class="o">=</span> <span class="n">live</span><span class="o">.</span><span class="n">stock_quote</span><span class="p">(</span><span class="s2">&quot;INFY&quot;</span><span class="p">)</span>
 </span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Price: ₹</span><span class="si">{</span><span class="n">quote</span><span class="p">[</span><span class="s1">&#39;priceInfo&#39;</span><span class="p">][</span><span class="s1">&#39;lastPrice&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Change: </span><span class="si">{</span><span class="n">quote</span><span class="p">[</span><span class="s1">&#39;priceInfo&#39;</span><span class="p">][</span><span class="s1">&#39;pChange&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">%&quot;</span><span class="p">)</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Price: ₹</span><span class="si">{</span><span class="n">quote</span><span class="p">[</span><span class="s1">&#39;price&#39;</span><span class="p">][</span><span class="s1">&#39;last&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Change: </span><span class="si">{</span><span class="n">quote</span><span class="p">[</span><span class="s1">&#39;price&#39;</span><span class="p">][</span><span class="s1">&#39;change_percent&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">%&quot;</span><span class="p">)</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Company: </span><span class="si">{</span><span class="n">quote</span><span class="p">[</span><span class="s1">&#39;company_name&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <h3 id="download-bhavcopy">Download Bhavcopy<a class="headerlink" href="#download-bhavcopy" title="Permanent link">&para;</a></h3>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">date</span>
@@ -1022,31 +1047,40 @@
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># Download equity bhavcopy</span>
 </span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="n">bhavcopy_save</span><span class="p">(</span><span class="n">date</span><span class="p">(</span><span class="mi">2024</span><span class="p">,</span> <span class="mi">7</span><span class="p">,</span> <span class="mi">26</span><span class="p">),</span> <span class="s2">&quot;downloads/&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<h3 id="metadata-and-analytics">Metadata And Analytics<a class="headerlink" href="#metadata-and-analytics" title="Permanent link">&para;</a></h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">aynse</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataset_capabilities</span><span class="p">,</span> <span class="n">summarize_option_chain</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">capabilities</span> <span class="o">=</span> <span class="n">dataset_capabilities</span><span class="p">()</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="nb">print</span><span class="p">(</span><span class="n">capabilities</span><span class="p">[</span><span class="s2">&quot;historical&quot;</span><span class="p">][</span><span class="s2">&quot;outputs&quot;</span><span class="p">])</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="n">chain</span> <span class="o">=</span> <span class="n">live</span><span class="o">.</span><span class="n">equities_option_chain</span><span class="p">(</span><span class="s2">&quot;RELIANCE&quot;</span><span class="p">)</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="nb">print</span><span class="p">(</span><span class="n">summarize_option_chain</span><span class="p">(</span><span class="n">chain</span><span class="p">))</span>
+</span></code></pre></div>
 <h3 id="cli-usage">CLI Usage<a class="headerlink" href="#cli-usage" title="Permanent link">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Download historical stock data</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>aynse<span class="w"> </span>stock<span class="w"> </span>-s<span class="w"> </span>RELIANCE<span class="w"> </span>-f<span class="w"> </span><span class="m">2024</span>-01-01<span class="w"> </span>-t<span class="w"> </span><span class="m">2024</span>-03-31<span class="w"> </span>-o<span class="w"> </span>reliance.csv
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1"># Get live quote</span>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>aynse<span class="w"> </span>quote<span class="w"> </span>-s<span class="w"> </span>RELIANCE
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="c1"># List trading holidays</span>
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>aynse<span class="w"> </span>holidays<span class="w"> </span>-y<span class="w"> </span><span class="m">2024</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Download historical stock data</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>aynse<span class="w"> </span>stock<span class="w"> </span>-s<span class="w"> </span>RELIANCE<span class="w"> </span>-f<span class="w"> </span><span class="m">2024</span>-01-01<span class="w"> </span>-t<span class="w"> </span><span class="m">2024</span>-03-31<span class="w"> </span>-o<span class="w"> </span>reliance.csv
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="c1"># Get live quote</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>aynse<span class="w"> </span>quote<span class="w"> </span>-s<span class="w"> </span>RELIANCE
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="c1"># List trading holidays</span>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>aynse<span class="w"> </span>holidays<span class="w"> </span>-y<span class="w"> </span><span class="m">2024</span>
 </span></code></pre></div>
 <h2 id="architecture">Architecture<a class="headerlink" href="#architecture" title="Permanent link">&para;</a></h2>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>aynse/
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>├── nse/                    # NSE data fetching
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>│   ├── history.py         # Historical data (stocks, indices, derivatives)
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>│   ├── archives.py        # Bhavcopy downloads
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>│   ├── live.py            # Live market data
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>│   ├── http_client.py     # Resilient HTTP client
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>│   ├── connection_pool.py # Connection management
-</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>│   ├── request_batcher.py # Batch processing
-</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>│   └── streaming_processor.py  # Memory-efficient streaming
-</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>├── rbi/                   # RBI data
-</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>│   └── historical.py      # Policy rates
-</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>├── holidays.py            # Trading calendar
-</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a>├── util.py                # Utilities (caching, date handling)
-</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a>└── cli.py                 # Command-line interface
+<div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>aynse/
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>├── nse/                    # NSE data fetching
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>│   ├── history.py         # Historical data (stocks, indices, derivatives)
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>│   ├── archives.py        # Bhavcopy downloads
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>│   ├── live.py            # Live market data
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>│   ├── http_client.py     # Resilient HTTP client
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>│   ├── connection_pool.py # Connection management
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>│   ├── request_batcher.py # Batch processing
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>│   └── streaming_processor.py  # Memory-efficient streaming
+</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>├── rbi/                   # RBI data
+</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>│   └── historical.py      # Policy rates
+</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a>├── holidays.py            # Trading calendar
+</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a>├── util.py                # Utilities (caching, date handling)
+</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a>└── cli.py                 # Command-line interface
 </span></code></pre></div>
 <h2 id="next-steps">Next Steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h2>
 <ul>
