@@ -9,9 +9,9 @@
 
 ## features
 
-- **Historical data:** canonical stock, index, derivative, and index valuation records
-- **Archive datasets:** bhavcopy, full bhavcopy, F&O bhavcopy, index bhavcopy, bulk deals, and index constituents
-- **Live market data:** standardized quotes, option chains
+- **historical data:** canonical stock, index, derivative, and index valuation records
+- **archive datasets:** bhavcopy, full bhavcopy, F&O bhavcopy, index bhavcopy, bulk deals, and index constituents
+- **live market data:** standardized quotes, option chains
 - **cli:** simple commands for quick downloads
 - **resilient networking:** http/2, connection pooling, retries with exponential backoff, rate limiting, circuit breaker
 - **batching & streaming:** adaptive concurrency and low-memory processing
