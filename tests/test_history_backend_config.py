@@ -60,8 +60,9 @@ def test_custom_provider_backend():
     h = NSEHistory()
     rows = h.stock_raw("abc", date(2024, 1, 1), date(2024, 1, 31), "eq")
     assert len(rows) == 1
-    assert rows[0]["CH_SYMBOL"] == "ABC"
-    assert rows[0]["CH_SERIES"] == "EQ"
+    assert rows[0]["symbol"] == "ABC"
+    assert rows[0]["series"] == "EQ"
+    assert rows[0]["date"] == date(2024, 1, 31)
 
 
 def test_custom_backend_without_provider_raises():
@@ -100,3 +101,5 @@ def test_auto_fallback_to_bhavcopy_when_nse_empty(monkeypatch):
 
     rows = h.stock_raw("RELIANCE", date(2024, 1, 1), date(2024, 1, 31), "EQ")
     assert len(rows) == 1
+    assert rows[0]["symbol"] == "RELIANCE"
+    assert rows[0]["close"] == 1.0

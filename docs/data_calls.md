@@ -1,146 +1,196 @@
 # Data Calls Reference
 
-Brief, canonical reference for all public data calls. Return types are noted succinctly.
+Canonical reference for the standardized `aynse` public API.
 
-## Archives (aynse.nse.archives)
+## Shared contract
 
-- bhavcopy_raw(dt: date) -> str
-  - Equity bhavcopy CSV text for the given date.
-  - Format: CSV string (columns per NSE CM bhavcopy).
+- Date boundaries accept `date | datetime | "YYYY-MM-DD"`.
+- Symbol-based APIs normalize symbols to uppercase.
+- Time-series record APIs return rows in chronological ascending order.
+- `*_raw(...)` returns canonical records.
+- `*_df(...)` returns a dataframe with the same canonical columns.
+- `*_save(...)` writes a file and returns the written path.
 
-- bhavcopy_save(dt: date, dest: str, skip_if_present=True) -> str
-  - Saves equity bhavcopy CSV to dest.
-  - Returns file path.
+## Historical data
 
-- full_bhavcopy_raw(dt: date) -> str
-  - Full bhavcopy CSV text (includes delivery info).
-  - Format: CSV string.
+### Stocks
 
-- full_bhavcopy_save(dt: date, dest: str, skip_if_present=True) -> str
-  - Saves full bhavcopy CSV to dest; returns file path.
+- `stock_raw(symbol, from_date, to_date, series="EQ") -> list[dict]`
+  - Canonical fields:
+  - `date`, `symbol`, `series`, `open`, `high`, `low`, `close`, `previous_close`, `last_traded_price`, `vwap`, `week_52_high`, `week_52_low`, `volume`, `turnover`, `trades`
+- `stock_df(...) -> pandas.DataFrame`
+- `stock_csv(...) -> str`
 
-- bhavcopy_fo_raw(dt: date) -> str
-  - F&O bhavcopy CSV text for the given date.
+### Indices
 
-- bhavcopy_fo_save(dt: date, dest: str, skip_if_present=True) -> str
-  - Saves F&O bhavcopy CSV; returns file path.
+- `index_raw(symbol, from_date, to_date) -> list[dict]`
+  - Canonical fields:
+  - `date`, `symbol`, `open`, `high`, `low`, `close`
+- `index_df(...) -> pandas.DataFrame`
+- `index_csv(...) -> str`
 
-- bhavcopy_index_raw(dt: date) -> str
-  - Index bhavcopy CSV text for the date (Nifty Indices).
+### Index valuations
 
-- bhavcopy_index_save(dt: date, dest: str, skip_if_present=True) -> str
-  - Saves index bhavcopy CSV; returns file path.
+- `index_pe_raw(symbol, from_date, to_date) -> list[dict]`
+  - Canonical fields:
+  - `date`, `symbol`, `price_to_earnings`, `price_to_book`, `dividend_yield`
+- `index_pe_df(...) -> pandas.DataFrame`
 
-- index_constituent_raw(index_type: str) -> str
-  - CSV text of constituents for an index (e.g., "nifty50").
+### Derivatives
 
-- index_constituent_save(index_type: str, dest: str, skip_if_present=True) -> str
-  - Saves constituents CSV; returns file path.
+- `derivatives_raw(symbol, from_date, to_date, expiry_date, instrument_type, strike_price=None, option_type=None) -> list[dict]`
+  - Canonical fields:
+  - `date`, `symbol`, `instrument_type`, `expiry_date`, `option_type`, `strike_price`, `open`, `high`, `low`, `close`, `last_traded_price`, `settlement_price`, `volume`, `lot_size`, `turnover`, `open_interest`, `change_in_open_interest`
+- `derivatives_df(...) -> pandas.DataFrame`
+- `derivatives_csv(...) -> str`
 
-- index_constituent_save_all(dest: str, skip_if_present=True) -> list[str]
-  - Saves constituents for all known indices; returns file paths.
+## Archive data
 
-- bulk_deals_raw(from_date: date, to_date: date) -> dict
-  - JSON for NSE bulk deals in date range.
-  - Structure: {"data": [ ... records ... ], ...}
+### Equity bhavcopy
 
-- bulk_deals_save(from_date: date, to_date: date, dest: str) -> str
-  - Saves bulk deals JSON to file; returns file path.
+- `bhavcopy_raw(dt) -> list[dict]`
+- `bhavcopy_df(dt) -> pandas.DataFrame`
+- `bhavcopy_save(dt, dest, skip_if_present=True) -> str`
 
-- expiry_dates(dt: date, instrument_type: str = "", symbol: str = "", contracts: int = 0, months_ahead: int = 6) -> list[date]
-  - Algorithmic calculation of expiry dates honoring NSE policy changes.
+### Full bhavcopy
 
-## History (aynse.nse.history)
+- `full_bhavcopy_raw(dt) -> list[dict]`
+- `full_bhavcopy_df(dt) -> pandas.DataFrame`
+- `full_bhavcopy_save(dt, dest, skip_if_present=True) -> str`
 
-- stock_raw(symbol: str, from_date: date, to_date: date, series: str = "EQ") -> list[dict]
-  - JSON-like list of rows from NSE "historical cm equity" API.
-  - Keys include: CH_TIMESTAMP, CH_SERIES, CH_OPENING_PRICE, CH_TRADE_HIGH_PRICE, CH_TRADE_LOW_PRICE, CH_PREVIOUS_CLS_PRICE, CH_LAST_TRADED_PRICE, CH_CLOSING_PRICE, VWAP, CH_52WEEK_HIGH_PRICE, CH_52WEEK_LOW_PRICE, CH_TOT_TRADED_QTY, CH_TOT_TRADED_VAL, CH_TOTAL_TRADES, CH_SYMBOL.
+### F&O bhavcopy
 
-- stock_df(symbol: str, from_date: date, to_date: date, series: str = "EQ") -> pandas.DataFrame
-  - Columns: DATE, SERIES, OPEN, HIGH, LOW, PREV. CLOSE, LTP, CLOSE, VWAP, 52W H, 52W L, VOLUME, VALUE, NO OF TRADES, SYMBOL.
+- `bhavcopy_fo_raw(dt) -> list[dict]`
+- `bhavcopy_fo_df(dt) -> pandas.DataFrame`
+- `bhavcopy_fo_save(dt, dest, skip_if_present=True) -> str`
 
-- stock_csv(symbol: str, from_date: date, to_date: date, series: str = "EQ", output: str = "", show_progress: bool = True) -> str
-  - Saves CSV with same columns as stock_df; returns file path.
+### Index bhavcopy
 
-- derivatives_raw(symbol: str, from_date: date, to_date: date, expiry_date: date, instrument_type: str, strike_price: float | None, option_type: str | None) -> list[dict]
-  - JSON-like list from NSE "historical fo derivatives" API.
-  - Keys include (subset): FH_TIMESTAMP, FH_EXPIRY_DT, FH_OPTION_TYPE (if options), FH_STRIKE_PRICE (if options), FH_OPENING_PRICE, FH_TRADE_HIGH_PRICE, FH_TRADE_LOW_PRICE, FH_CLOSING_PRICE, FH_LAST_TRADED_PRICE, FH_SETTLE_PRICE, FH_TOT_TRADED_QTY, FH_MARKET_LOT, FH_TOT_TRADED_VAL, FH_OPEN_INT, FH_CHANGE_IN_OI, FH_SYMBOL.
+- `bhavcopy_index_raw(dt) -> list[dict]`
+- `bhavcopy_index_df(dt) -> pandas.DataFrame`
+- `bhavcopy_index_save(dt, dest, skip_if_present=True) -> str`
 
-- derivatives_df(...) -> pandas.DataFrame
-  - FUT fields: DATE, EXPIRY, OPEN, HIGH, LOW, CLOSE, LTP, SETTLE PRICE, TOTAL TRADED QUANTITY, MARKET LOT, PREMIUM VALUE, OPEN INTEREST, CHANGE IN OI, SYMBOL.
-  - OPT fields: DATE, EXPIRY, OPTION TYPE, STRIKE PRICE, OPEN, HIGH, LOW, CLOSE, LTP, SETTLE PRICE, TOTAL TRADED QUANTITY, MARKET LOT, PREMIUM VALUE, OPEN INTEREST, CHANGE IN OI, SYMBOL.
+### Bulk deals
 
-- derivatives_csv(...) -> str
-  - Saves derivatives data to CSV; returns file path.
+- `bulk_deals_raw(from_date, to_date) -> list[dict]`
+  - Canonical fields vary by row, but dates, quantities, rates, client names, and symbols are normalized when present.
+- `bulk_deals_df(from_date, to_date) -> pandas.DataFrame`
+- `bulk_deals_save(from_date, to_date, dest) -> str`
 
-- index_raw(symbol: str, from_date: date, to_date: date) -> list[dict]
-  - Nifty Indices historical data via POST JSON; list of dict rows.
-  - Typical keys: INDEX_NAME, HistoricalDate, OPEN, HIGH, LOW, CLOSE.
+### Index constituents
 
-- index_pe_raw(symbol: str, from_date: date, to_date: date) -> list[dict]
-  - Nifty Indices PE/PB/dividend data; keys include: pe, pb, divYield, DATE, Index Name.
+- `index_constituent_raw(index_type) -> list[dict]`
+- `index_constituent_df(index_type) -> pandas.DataFrame`
+- `index_constituent_save(index_type, dest, skip_if_present=True) -> str`
+- `index_constituent_save_all(dest, skip_if_present=True) -> list[str]`
 
-- index_df(symbol: str, from_date: date, to_date: date) -> pandas.DataFrame
-  - Typed dataframe from index_raw.
+### Expiry calculations
 
-- index_pe_df(symbol: str, from_date: date, to_date: date) -> pandas.DataFrame
-  - Typed dataframe from index_pe_raw.
+- `expiry_dates(dt, instrument_type="", symbol="", contracts=0, months_ahead=6) -> list[date]`
 
-- set_stock_history_backend(backend: str) -> None
-  - Set global backend for stock history calls.
-  - Supported values: "auto", "nse", "bhavcopy", "custom".
+## Live data
 
-- get_stock_history_backend() -> str
-  - Get currently configured stock history backend.
+All live methods return library-defined top-level payloads.
 
-- register_stock_history_provider(provider: callable | None) -> None
-  - Register/unregister custom provider used when backend is "custom".
-  - Signature: provider(symbol, from_date, to_date, series) -> list[dict]
+### Quotes and market state
 
-## Live (aynse.nse.live.NSELive)
+- `NSELive.stock_quote(symbol) -> dict`
+  - Keys:
+  - `quote_type`, `symbol`, `company_name`, `isin`, `industry`, `listing_date`, `is_fno`, `identifier`, `price`, `week_range`, `metadata`
+- `NSELive.stock_quote_fno(symbol) -> dict`
+  - Includes `derivative_details`
+- `NSELive.trade_info(symbol) -> dict`
+  - Keys:
+  - `symbol`, `bulk_block_deals`, `market_depth`, `security_wise_dp`, `metadata`
+- `NSELive.market_status() -> dict`
+  - Keys:
+  - `markets`, `market_cap`, `gift_nifty`, `indicative_nifty_50`
+- `NSELive.market_turnover() -> dict`
+  - Keys:
+  - `records`, `source`
+- `NSELive.eq_derivative_turnover(type="allcontracts") -> dict`
+  - Keys:
+  - `category`, `value`, `volume`
+- `NSELive.all_indices() -> dict`
+  - Keys:
+  - `advances`, `declines`, `unchanged`, `indices`, `timestamp`
+- `NSELive.live_index(symbol="NIFTY 50") -> dict`
+  - Keys:
+  - `name`, `advance`, `decline`, `unchanged`, `data`
+- `NSELive.pre_open_market(key="NIFTY") -> dict`
+  - Keys:
+  - `key`, `advances`, `declines`, `unchanged`, `data`
 
-All return Python dicts parsed from NSE JSON unless noted.
+### Charting
 
-- stock_quote(symbol: str) -> dict
-- stock_quote_fno(symbol: str) -> dict
-- trade_info(symbol: str) -> dict
-- market_status() -> dict
-- chart_data(symbol: str, indices: bool = False, flag: str = "1D") -> dict
-- tick_data(symbol: str, indices: bool = False, flag: str = "1D") -> dict  (alias of chart_data)
-- market_turnover() -> dict
-- eq_derivative_turnover(type: str = "allcontracts") -> dict
-- all_indices() -> dict
-- live_index(symbol: str = "NIFTY 50") -> dict
-- index_option_chain(symbol: str = "NIFTY") -> dict  (option-chain-v3, auto-selects first expiry)
-- equities_option_chain(symbol: str) -> dict        (option-chain-v3, auto-selects first expiry)
-- currency_option_chain(symbol: str = "USDINR") -> dict
-- live_fno() -> dict  (alias: live_index("SECURITIES IN F&O"))
-- pre_open_market(key: str = "NIFTY") -> dict
-- holiday_list() -> dict
-- corporate_announcements(segment: str = 'equities', from_date: date | None = None, to_date: date | None = None, symbol: str | None = None) -> dict
+- `NSELive.chart_data(symbol, indices=False, flag="1D") -> dict`
+- `NSELive.tick_data(symbol, indices=False, flag="1D") -> dict`
+  - Keys:
+  - `symbol`, `is_index`, `range`, `points`, `timestamp`, `open`, `high`, `low`, `close`
 
-Notes:
-- Live methods are lightly cached (time-based) to reduce load.
-- HTTP client handles retries, priming, and pooling automatically.
+### Option chains
 
-## RBI (aynse.rbi.historical)
+- `NSELive.index_option_chain(symbol="NIFTY") -> dict`
+- `NSELive.equities_option_chain(symbol) -> dict`
+- `NSELive.currency_option_chain(symbol="USDINR") -> dict`
+  - Keys:
+  - `symbol`, `market_type`, `timestamp`, `underlying_value`, `expiry_dates`, `strike_prices`, `records`, `summary`
+  - Each `records` row contains:
+  - `strike_price`, `expiry_date`, `call`, `put`
 
-- policy_rate_archive(n: int = 10) -> list[dict]
-  - Scraped policy rate entries as list of dicts.
-  - Columns normalized to lowercase with underscores.
+### Corporate events
 
-## Batching (aynse.nse.request_batcher)
+- `NSELive.corporate_announcements(segment="equities", from_date=None, to_date=None, symbol=None) -> list[dict]`
+- `NSELive.corporate_actions(from_date=None, to_date=None, symbol=None, event_types=None) -> list[dict]`
+- `NSELive.results_calendar(from_date=None, to_date=None, symbol=None) -> list[dict]`
+  - Canonical event fields:
+  - `symbol`, `company_name`, `isin`, `event_type`, `headline`, `summary`, `event_date`, `exchange_received_at`, `attachment_url`, `attachment_size`, `segment`, `has_xbrl`
 
-- batch_stock_requests(symbols: list[str], from_date: str, to_date: str, series: str = "EQ", batcher: RequestBatcher | None = None) -> list[BatchResult]
-- batch_index_requests(symbols: list[str], from_date: str, to_date: str, batcher: RequestBatcher | None = None) -> list[BatchResult]
-- batch_derivatives_requests(requests_data: list[dict], batcher: RequestBatcher | None = None) -> list[BatchResult]
-  - BatchResult: { success: bool, data: Any, error: str | None, duration: float, retries: int }
+### Miscellaneous
 
-## Streaming (aynse.nse.streaming_processor)
+- `NSELive.holiday_list() -> dict`
+  - Keys:
+  - `markets`
+- `NSELive.live_fno() -> dict`
+- `NSELive.bulk_equities_option_chain(symbols, max_workers=3) -> dict`
+- `NSELive.get_options_around_date(symbol, target_date, days_before=5, days_after=5) -> dict`
+- `NSELive.analyze_earnings_options(symbols_and_dates, max_workers=3) -> dict`
+- `NSELive.metadata() -> dict`
 
-- StreamingProcessor.process_csv_file(file_path: str, processor_func, skip_header=True) -> Any
-- StreamingProcessor.process_json_file(file_path: str, processor_func) -> Any
-- stream_filter_data, stream_transform_data, stream_aggregate_data, create_data_generator(...)
-  - Generators and helpers for memory-efficient processing.
+## Holidays and RBI
 
+- `holiday_records(year=None, month=None) -> list[dict]`
+  - Canonical fields:
+  - `date`, `weekday`, `description`, `source`
+- `holidays(year=None, month=None) -> list[date]`
+- `is_holiday(dt) -> bool`
+- `is_trading_day(dt) -> bool`
+- `get_trading_days(from_date, to_date) -> list[date]`
+- `count_trading_days(from_date, to_date) -> int`
+- `policy_rate_archive(n=10) -> list[dict]`
+  - Canonical fields:
+  - `snapshot_date`, `policy_repo_rate`, `standing_deposit_facility_rate`, `marginal_standing_facility_rate`, `bank_rate`, `fixed_reverse_repo_rate`, `cash_reserve_ratio`, `statutory_liquidity_ratio`, `source`
 
+## Metadata and analytics
+
+- `supported_indices() -> list[dict]`
+- `supported_instruments() -> list[dict]`
+- `supported_event_categories() -> list[str]`
+- `dataset_capabilities() -> dict`
+- `add_returns(records, price_field="close") -> list[dict]`
+- `add_rolling_volatility(records, window=20, price_field="close") -> list[dict]`
+- `add_drawdown(records, price_field="close") -> list[dict]`
+- `add_gap_metrics(records) -> list[dict]`
+- `add_volume_metrics(records, window=20) -> list[dict]`
+- `summarize_option_chain(chain) -> dict`
+- `analyze_event_window(price_records, events, window_before=5, window_after=5) -> list[dict]`
+
+## Batching and streaming
+
+- `batch_stock_requests(symbols, from_date, to_date, series="EQ", batcher=None) -> list[BatchResult]`
+- `batch_index_requests(symbols, from_date, to_date, batcher=None) -> list[BatchResult]`
+- `batch_derivatives_requests(requests_data, batcher=None) -> list[BatchResult]`
+- `StreamingProcessor.process_csv_file(...) -> Any`
+- `StreamingProcessor.process_csv_string(...) -> Any`
+- `StreamingProcessor.process_json_file(...) -> Any`
+- `StreamingProcessor.process_zip_file(...) -> Any`

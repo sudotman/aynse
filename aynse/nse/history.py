@@ -23,6 +23,20 @@ import httpx
 import click
 
 from .. import util as ut
+from ..standard import (
+    DateLike,
+    InputValidationError,
+    coerce_date,
+    dataframe_from_records,
+    normalize_name,
+    normalize_symbol,
+    parse_date_maybe,
+    records_to_csv_text,
+    sort_by_date,
+    to_float,
+    to_int,
+    write_records_csv,
+)
 from .connection_pool import get_connection_pool
 from .http_client import NSEHttpClient
 
@@ -55,6 +69,61 @@ _stock_history_backend = os.environ.get("AYNSE_STOCK_HISTORY_BACKEND", "auto").s
 if _stock_history_backend not in _VALID_STOCK_BACKENDS:
     _stock_history_backend = "auto"
 _stock_history_provider: Optional[StockHistoryProvider] = None
+
+STOCK_FIELDS = [
+    "date",
+    "symbol",
+    "series",
+    "open",
+    "high",
+    "low",
+    "previous_close",
+    "last_price",
+    "close",
+    "vwap",
+    "week_52_high",
+    "week_52_low",
+    "volume",
+    "turnover",
+    "trades",
+]
+
+DERIVATIVE_FIELDS = [
+    "date",
+    "symbol",
+    "instrument_type",
+    "expiry",
+    "option_type",
+    "strike_price",
+    "open",
+    "high",
+    "low",
+    "close",
+    "last_price",
+    "settle_price",
+    "volume",
+    "market_lot",
+    "turnover",
+    "open_interest",
+    "change_in_open_interest",
+]
+
+INDEX_FIELDS = [
+    "date",
+    "symbol",
+    "open",
+    "high",
+    "low",
+    "close",
+]
+
+INDEX_PE_FIELDS = [
+    "date",
+    "symbol",
+    "price_to_earnings",
+    "price_to_book",
+    "dividend_yield",
+]
 
 
 def set_stock_history_backend(backend: str) -> None:
@@ -281,6 +350,46 @@ class NSEHistory:
             "CH_SYMBOL": str(row.get("SYMBOL", "")).strip(),
         }
 
+    def _canonical_stock_record(self, row: Dict[str, Any]) -> Dict[str, Any]:
+        return {
+            "date": coerce_date(row.get("CH_TIMESTAMP"), "CH_TIMESTAMP"),
+            "symbol": normalize_symbol(row.get("CH_SYMBOL", "")),
+            "series": str(row.get("CH_SERIES", "")).strip().upper() or "EQ",
+            "open": to_float(row.get("CH_OPENING_PRICE")),
+            "high": to_float(row.get("CH_TRADE_HIGH_PRICE")),
+            "low": to_float(row.get("CH_TRADE_LOW_PRICE")),
+            "previous_close": to_float(row.get("CH_PREVIOUS_CLS_PRICE")),
+            "last_price": to_float(row.get("CH_LAST_TRADED_PRICE")),
+            "close": to_float(row.get("CH_CLOSING_PRICE")),
+            "vwap": to_float(row.get("VWAP")),
+            "week_52_high": to_float(row.get("CH_52WEEK_HIGH_PRICE")),
+            "week_52_low": to_float(row.get("CH_52WEEK_LOW_PRICE")),
+            "volume": to_int(row.get("CH_TOT_TRADED_QTY")),
+            "turnover": to_float(row.get("CH_TOT_TRADED_VAL")),
+            "trades": to_int(row.get("CH_TOTAL_TRADES")),
+        }
+
+    def _canonical_derivative_record(self, row: Dict[str, Any]) -> Dict[str, Any]:
+        return {
+            "date": coerce_date(row.get("FH_TIMESTAMP"), "FH_TIMESTAMP"),
+            "symbol": normalize_symbol(row.get("FH_SYMBOL", "")),
+            "instrument_type": str(row.get("FH_INSTRUMENT") or row.get("FH_INSTRUMENT_TYPE") or "").strip().upper(),
+            "expiry": coerce_date(row.get("FH_EXPIRY_DT"), "FH_EXPIRY_DT"),
+            "option_type": (str(row.get("FH_OPTION_TYPE", "")).strip().upper() or None),
+            "strike_price": to_float(row.get("FH_STRIKE_PRICE")),
+            "open": to_float(row.get("FH_OPENING_PRICE")),
+            "high": to_float(row.get("FH_TRADE_HIGH_PRICE")),
+            "low": to_float(row.get("FH_TRADE_LOW_PRICE")),
+            "close": to_float(row.get("FH_CLOSING_PRICE")),
+            "last_price": to_float(row.get("FH_LAST_TRADED_PRICE")),
+            "settle_price": to_float(row.get("FH_SETTLE_PRICE")),
+            "volume": to_int(row.get("FH_TOT_TRADED_QTY")),
+            "market_lot": to_int(row.get("FH_MARKET_LOT")),
+            "turnover": to_float(row.get("FH_TOT_TRADED_VAL")),
+            "open_interest": to_int(row.get("FH_OPEN_INT")),
+            "change_in_open_interest": to_int(row.get("FH_CHANGE_IN_OI")),
+        }
+
     def _fetch_bhavcopy_for_symbol(self, dt: date, symbol: str, series: str) -> Optional[Dict[str, Any]]:
         """Extract one symbol's row from a single day's full bhavcopy."""
         try:
@@ -353,9 +462,12 @@ class NSEHistory:
         
         self.r = self._get("derivatives", params)
         j = self.r.json()
-        return j['data']
+        rows = j['data']
+        for row in rows:
+            row.setdefault("FH_INSTRUMENT", instrument_type)
+        return rows
     
-    def stock_raw(self, symbol, from_date, to_date, series="EQ"):
+    def stock_raw(self, symbol: str, from_date: DateLike, to_date: DateLike, series: str = "EQ"):
         """
         Fetch raw stock data for date range.
 
@@ -366,11 +478,13 @@ class NSEHistory:
         - No validation of input parameters
         """
         # Validate inputs
-        if from_date > to_date:
+        start = coerce_date(from_date, "from_date")
+        end = coerce_date(to_date, "to_date")
+        if start > end:
             raise ValueError("from_date must be before or equal to to_date")
         backend = self._resolved_stock_backend()
-        symbol_u = str(symbol).upper()
-        series_u = str(series).upper()
+        symbol_u = normalize_symbol(symbol)
+        series_u = str(series).strip().upper() or "EQ"
 
         if backend == "custom":
             if _stock_history_provider is None:
@@ -378,19 +492,26 @@ class NSEHistory:
                     "Stock backend is 'custom' but no provider is registered. "
                     "Call register_stock_history_provider(...) first."
                 )
-            return _stock_history_provider(symbol_u, from_date, to_date, series_u)
+            records = _stock_history_provider(symbol_u, start, end, series_u)
+            if records and "CH_SYMBOL" in records[0]:
+                canonical = [self._canonical_stock_record(row) for row in records]
+            else:
+                canonical = [dict(row) for row in records]
+            return sort_by_date(canonical)
 
         if backend == "bhavcopy":
-            return self._stock_from_bhavcopy(symbol_u, from_date, to_date, series_u)
+            native = self._stock_from_bhavcopy(symbol_u, start, end, series_u)
+            return sort_by_date([self._canonical_stock_record(row) for row in native], "date")
 
         # nse/auto: try direct NSE endpoint first.
-        merged = self._stock_from_nse_api(symbol_u, from_date, to_date, series_u)
+        merged = self._stock_from_nse_api(symbol_u, start, end, series_u)
         if merged or backend == "nse":
-            return merged
+            return sort_by_date([self._canonical_stock_record(row) for row in merged], "date")
 
         # auto fallback only
-        if to_date <= date.today():
-            return self._stock_from_bhavcopy(symbol_u, from_date, to_date, series_u)
+        if end <= date.today():
+            native = self._stock_from_bhavcopy(symbol_u, start, end, series_u)
+            return sort_by_date([self._canonical_stock_record(row) for row in native], "date")
 
         return []
 
@@ -403,22 +524,26 @@ class NSEHistory:
         - Complex parameter validation could be done earlier
         """
         # Validate inputs
-        if from_date > to_date:
+        start = coerce_date(from_date, "from_date")
+        end = coerce_date(to_date, "to_date")
+        expiry = coerce_date(expiry_date, "expiry_date")
+        if start > end:
             raise ValueError("from_date must be before or equal to to_date")
 
         valid_instrument_types = ["OPTIDX", "OPTSTK", "FUTIDX", "FUTSTK"]
-        if instrument_type not in valid_instrument_types:
+        instrument = str(instrument_type).strip().upper()
+        if instrument not in valid_instrument_types:
             raise ValueError(f"Invalid instrument_type. Must be one of {valid_instrument_types}")
 
-        if "OPT" in instrument_type and (strike_price is None or option_type is None):
+        if "OPT" in instrument and (strike_price is None or option_type is None):
             raise ValueError("strike_price and option_type are required for options")
 
-        date_ranges = ut.break_dates(from_date, to_date)
-        params = [(symbol, x[0], x[1], expiry_date, instrument_type, strike_price, option_type) for x in reversed(date_ranges)]
+        date_ranges = ut.break_dates(start, end)
+        params = [(normalize_symbol(symbol), x[0], x[1], expiry, instrument, strike_price, (str(option_type).upper() if option_type else None)) for x in reversed(date_ranges)]
 
         # Show progress if requested
         if self.show_progress:
-            print(f"Fetching derivatives data for {symbol} {instrument_type} from {from_date} to {to_date} ({len(params)} requests)")
+            print(f"Fetching derivatives data for {symbol} {instrument} from {start} to {end} ({len(params)} requests)")
 
         chunks = ut.pool(self._derivatives, params, max_workers=self.workers)
         valid_chunks = [chunk for chunk in chunks if chunk is not None]
@@ -434,7 +559,9 @@ class NSEHistory:
                     except Exception:
                         continue
 
-        return list(itertools.chain.from_iterable(valid_chunks))
+        native = list(itertools.chain.from_iterable(valid_chunks))
+        canonical = [self._canonical_derivative_record(row) for row in native]
+        return sort_by_date(canonical)
 
        
 
@@ -462,42 +589,18 @@ stock_dtypes = [  ut.np_date,  str,
             ut.np_int, ut.np_float, ut.np_int, str]
    
 def stock_csv(symbol, from_date, to_date, series="EQ", output="", show_progress=True):
-    if show_progress:
-        h = NSEHistory()
-        h.show_progress = show_progress
-        date_ranges = ut.break_dates(from_date, to_date)
-        params = [(symbol, x[0], x[1], series) for x in reversed(date_ranges)]
-        with click.progressbar(params, label=symbol) as ps:
-            chunks = []
-            for p in ps:
-                r = h.stock_raw(*p)
-                chunks.append(r)
-            raw = list(itertools.chain.from_iterable(chunks))
-    else:
-        raw = stock_raw(symbol, from_date, to_date, series)
-
+    records = stock_raw(symbol, from_date, to_date, series)
+    start = coerce_date(from_date, "from_date")
+    end = coerce_date(to_date, "to_date")
+    normalized_symbol = normalize_symbol(symbol)
+    normalized_series = str(series).strip().upper() or "EQ"
     if not output:
-        output = "{}-{}-{}-{}.csv".format(symbol, from_date, to_date, series)
-    if raw:
-        with open(output, 'w') as fp:
-            fp.write(",".join(stock_final_headers) + '\n')
-            for row in raw:
-                row_select = [str(row[x]) for x in stock_select_headers]
-                line = ",".join(row_select) + '\n'
-                fp.write(line) 
-    return output
+        output = f"{normalized_symbol}-{start.isoformat()}-{end.isoformat()}-{normalized_series}.csv"
+    return write_records_csv(output, records, STOCK_FIELDS)
 
 def stock_df(symbol, from_date, to_date, series="EQ"):
-    if not pd:
-        raise ModuleNotFoundError("Please install pandas using \n pip install pandas")
-    raw = stock_raw(symbol, from_date, to_date, series)
-    if not raw:
-        return pd.DataFrame(columns=stock_final_headers)
-    df = pd.DataFrame(raw)[stock_select_headers]
-    df.columns = stock_final_headers
-    for i, h in enumerate(stock_final_headers):
-        df[h] = df[h].apply(stock_dtypes[i])
-    return df
+    records = stock_raw(symbol, from_date, to_date, series)
+    return dataframe_from_records(records, STOCK_FIELDS)
 
 futures_select_headers = [  "FH_TIMESTAMP", "FH_EXPIRY_DT", 
                     "FH_OPENING_PRICE", "FH_TRADE_HIGH_PRICE",
@@ -527,70 +630,25 @@ options_final_headers = [   "DATE", "EXPIRY", "OPTION TYPE", "STRIKE PRICE",
                      "SYMBOL"]
 
 def derivatives_csv(symbol, from_date, to_date, expiry_date, instrument_type, strike_price=None, option_type=None, output="", show_progress=False):
-    if show_progress:
-        h = NSEHistory()
-        h.show_progress = show_progress
-        date_ranges = ut.break_dates(from_date, to_date)
-        params = [(symbol, x[0], x[1], expiry_date, instrument_type, strike_price, option_type) for x in reversed(date_ranges)]
-        with click.progressbar(params, label=symbol) as ps:
-            chunks = []
-            for p in ps:
-                r = h.derivatives_raw(*p)
-                chunks.append(r)
-            raw = list(itertools.chain.from_iterable(chunks))
-    else:
-        raw = derivatives_raw(symbol, from_date, to_date, expiry_date, instrument_type, strike_price, option_type)
+    records = derivatives_raw(symbol, from_date, to_date, expiry_date, instrument_type, strike_price, option_type)
+    start = coerce_date(from_date, "from_date")
+    end = coerce_date(to_date, "to_date")
+    instrument = str(instrument_type).strip().upper()
     if not output:
-        output = "{}-{}-{}-{}.csv".format(symbol, from_date, to_date, instrument_type)
-    if "FUT" in instrument_type:
-        final_headers = futures_final_headers
-        select_headers = futures_select_headers
-    if "OPT" in instrument_type:
-        final_headers = options_final_headers
-        select_headers = options_select_headers
-    if raw:
-        with open(output, 'w') as fp:
-            fp.write(",".join(final_headers) + '\n')
-            for row in raw:
-                row_select = [str(row[x]) for x in select_headers]
-                line = ",".join(row_select) + '\n'
-                fp.write(line) 
-    return output
+        output = f"{normalize_symbol(symbol)}-{start.isoformat()}-{end.isoformat()}-{instrument}.csv"
+    return write_records_csv(output, records, DERIVATIVE_FIELDS)
 
 def derivatives_df(symbol, from_date, to_date, expiry_date, instrument_type, strike_price=None, option_type=None):
-    if not pd:
-        raise ModuleNotFoundError("Please install pandas using \n pip install pandas")
-    raw = derivatives_raw(symbol, from_date, to_date, expiry_date, instrument_type, 
-                            strike_price=strike_price, option_type=option_type)
-    futures_dtype = [  ut.np_date, ut.np_date, 
-                ut.np_float, ut.np_float,
-                ut.np_float, ut.np_float,
-                ut.np_float, ut.np_float,
-                ut.np_int, ut.np_int,
-                ut.np_float, ut.np_float, ut.np_float,
-                str]
-    
-    options_dtype = [  ut.np_date, ut.np_date, str, ut.np_float,
-                ut.np_float, ut.np_float,
-                ut.np_float, ut.np_float,
-                ut.np_float, ut.np_float,
-                ut.np_int, ut.np_int,
-                ut.np_float, ut.np_float, ut.np_float,
-                str]
-
-    if "FUT" in instrument_type:
-        final_headers = futures_final_headers
-        select_headers = futures_select_headers
-        dtypes = futures_dtype
-    if "OPT" in instrument_type:
-        final_headers = options_final_headers
-        select_headers = options_select_headers
-        dtypes = options_dtype
-    df = pd.DataFrame(raw)[select_headers]
-    df.columns = final_headers
-    for i, h in enumerate(final_headers):
-        df[h] = df[h].apply(dtypes[i])
-    return df
+    records = derivatives_raw(
+        symbol,
+        from_date,
+        to_date,
+        expiry_date,
+        instrument_type,
+        strike_price=strike_price,
+        option_type=option_type,
+    )
+    return dataframe_from_records(records, DERIVATIVE_FIELDS)
 
 class NSEIndexHistory(NSEHistory):
     def __init__(self):
@@ -623,10 +681,26 @@ class NSEIndexHistory(NSEHistory):
         return json.loads(self.r.json()['d'])
     
     def index_raw(self, symbol, from_date, to_date):
-        date_ranges = ut.break_dates(from_date, to_date)
-        params = [(symbol, x[0], x[1]) for x in reversed(date_ranges)]
+        start = coerce_date(from_date, "from_date")
+        end = coerce_date(to_date, "to_date")
+        symbol_name = normalize_name(symbol)
+        date_ranges = ut.break_dates(start, end)
+        params = [(symbol_name, x[0], x[1]) for x in reversed(date_ranges)]
         chunks = ut.pool(self._index, params, max_workers=self.workers)
-        return list(itertools.chain.from_iterable(chunks))
+        native = list(itertools.chain.from_iterable(chunks))
+        records = []
+        for row in native:
+            records.append(
+                {
+                    "date": coerce_date(row.get("HistoricalDate"), "HistoricalDate"),
+                    "symbol": normalize_name(row.get("INDEX_NAME") or row.get("Index Name") or symbol_name),
+                    "open": to_float(row.get("OPEN")),
+                    "high": to_float(row.get("HIGH")),
+                    "low": to_float(row.get("LOW")),
+                    "close": to_float(row.get("CLOSE")),
+                }
+            )
+        return sort_by_date(records)
     
     @ut.cached(APP_NAME + '-index_pe')
     def _index_pe(self, symbol, from_date, to_date):
@@ -638,10 +712,25 @@ class NSEIndexHistory(NSEHistory):
         return json.loads(self.r.json()['d'])
 
     def index_pe_raw(self, symbol, from_date, to_date):
-        date_ranges = ut.break_dates(from_date, to_date)
-        params = [(symbol, x[0], x[1]) for x in reversed(date_ranges)]
+        start = coerce_date(from_date, "from_date")
+        end = coerce_date(to_date, "to_date")
+        symbol_name = normalize_name(symbol)
+        date_ranges = ut.break_dates(start, end)
+        params = [(symbol_name, x[0], x[1]) for x in reversed(date_ranges)]
         chunks = ut.pool(self._index_pe, params, max_workers=self.workers)
-        return list(itertools.chain.from_iterable(chunks))
+        native = list(itertools.chain.from_iterable(chunks))
+        records = []
+        for row in native:
+            records.append(
+                {
+                    "date": coerce_date(row.get("DATE"), "DATE"),
+                    "symbol": normalize_name(row.get("INDEX_NAME") or row.get("Index Name") or symbol_name),
+                    "price_to_earnings": to_float(row.get("pe")),
+                    "price_to_book": to_float(row.get("pb")),
+                    "dividend_yield": to_float(row.get("divYield")),
+                }
+            )
+        return sort_by_date(records)
 
 
 ih = NSEIndexHistory()
@@ -657,49 +746,18 @@ def _index_raw_method(self, symbol, from_date, to_date):
 NSEHistory.index_raw = _index_raw_method
 
 def index_csv(symbol, from_date, to_date, output="", show_progress=False):
-    if show_progress:
-        h = NSEIndexHistory()
-        date_ranges = ut.break_dates(from_date, to_date)
-        params = [(symbol, x[0], x[1]) for x in reversed(date_ranges)]
-        with click.progressbar(params, label=symbol) as ps:
-            chunks = []
-            for p in ps:
-                r = h._index(*p)
-                chunks.append(r)
-            raw = list(itertools.chain.from_iterable(chunks))
-    else:
-        raw = index_raw(symbol, from_date, to_date)
-    
+    records = index_raw(symbol, from_date, to_date)
+    start = coerce_date(from_date, "from_date")
+    end = coerce_date(to_date, "to_date")
     if not output:
-        output = "{}-{}-{}.csv".format(symbol, from_date, to_date)
-    
-    if raw:
-        with open(output, 'w') as fp:
-            fieldnames = ["INDEX_NAME", "HistoricalDate", "OPEN", "HIGH", "LOW", "CLOSE"]
-            writer = csv.DictWriter(fp, fieldnames=fieldnames, extrasaction='ignore')
-            writer.writeheader()
-            writer.writerows(raw)
-    return output
+        output = f"{normalize_name(symbol)}-{start.isoformat()}-{end.isoformat()}.csv"
+    return write_records_csv(output, records, INDEX_FIELDS)
 
 def index_df(symbol, from_date, to_date):
-    if not pd:
-        raise ModuleNotFoundError("Please install pandas using \n pip install pandas")
-    raw = index_raw(symbol, from_date, to_date)
-    df = pd.DataFrame(raw)
-    index_dtypes = {'OPEN': ut.np_float, 'HIGH': ut.np_float, 'LOW': ut.np_float, 'CLOSE': ut.np_float,
-                    'Index Name': str, 'INDEX_NAME': str, 'HistoricalDate': ut.np_date}
-    for col, dtype in index_dtypes.items():
-        df[col] = df[col].apply(dtype)
-    return df
+    records = index_raw(symbol, from_date, to_date)
+    return dataframe_from_records(records, INDEX_FIELDS)
 
 def index_pe_df(symbol, from_date, to_date):
-    if not pd:
-        raise ModuleNotFoundError("Please install pandas using \n pip install pandas")
-    raw = index_pe_raw(symbol, from_date, to_date)
-    df = pd.DataFrame(raw)
-    index_dtypes = {'pe': ut.np_float, 'pb': ut.np_float, 'divYield': ut.np_float,
-                    'Index Name': str, 'DATE': ut.np_date}
-    for col, dtype in index_dtypes.items():
-        df[col] = df[col].apply(dtype)
-    return df
+    records = index_pe_raw(symbol, from_date, to_date)
+    return dataframe_from_records(records, INDEX_PE_FIELDS)
 

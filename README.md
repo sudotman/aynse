@@ -35,6 +35,16 @@ pip install aynse[dev]
 pip install -r requirements.dev.txt
 ```
 
+## etymology / musings
+
+aynse is a portmanteau of "ayn" from miss ayn rand and "nse" from national stock exchange. ayn rand was a russian-american writer and philosopher known for her philosophy of objectivism, which emphasizes individualism and rational self-interest. among other things, she was a strong advocate for laissez-faire capitalism.
+
+the name serves as a fun ironical reminder of the library's purpose: to provide a tool for individuals to access and analyze financial data independently, without relying on large institutions or complex systems.
+
+in a cruel twist of fate, this open source library wouldn't be encouraged under ayn rand's philosophy, as she discouraged altruism and believed in the pursuit of one's own happiness as the highest moral purpose.
+
+and as the final act of irony, we gather to use this library to analyze financial markets while generating zero (and possibly, negative) intrinsic value for humankind as a whole - this is capitalism.
+
 ## quick start
 
 ### get historical stock data
@@ -234,7 +244,40 @@ pytest -m live -v --tb=short
 
 # end-to-end integration checks
 pytest -m e2e -v --tb=short
+
+# full suite (offline + live)
+pytest tests -v --tb=short
 ```
+
+## release workflow
+1. make your changes
+2. bump version
+```sh
+make bump-patch  # or bump-minor, bump-major
+```
+
+3. commit and tag
+```sh
+git commit -am "Bump version to X.Y.Z"
+git tag vX.Y.Z
+git push && git push --tags
+```
+
+4. create github release → automatically publishes to pypi.
+
+### everything to do with release/version control
+# show current version
+python scripts/bump_version.py --current
+
+# bump versions (updates pyproject.toml only)
+python scripts/bump_version.py patch    # 1.1.0 -> 1.1.1
+python scripts/bump_version.py minor    # 1.1.0 -> 1.2.0
+python scripts/bump_version.py major    # 1.1.0 -> 2.0.0
+python scripts/bump_version.py --set 2.0.0  # set exact version
+
+# preview changes without modifying
+python scripts/bump_version.py patch --dry-run
+
 
 ## documentation
 
@@ -249,4 +292,8 @@ contributions are welcome. Please add or update contract tests whenever you chan
 
 ## license
 
-this project uses a custom MIT-derived license with additional usage restrictions. See [LICENSE.md](LICENSE.md) for the exact terms.
+this project has a (custom) mit* license but extends limitations. if you're an agency/corporate with >2 employees, you cannot wrap this project or use it without prior written permission from the author. if you're an individual, you can use it freely for personal projects.
+
+this project is not intended for commercial use without prior permission. if caught using this project in violation of the license, it may result in automated reporting and/or legal action.
+
+please see the [license file](LICENSE.md) for more details.

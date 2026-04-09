@@ -1,6 +1,14 @@
 import asyncio
 import time
-from aynse.nse.request_batcher import RequestBatcher, BatchStrategy
+from datetime import date
+from unittest.mock import patch
+
+from aynse.nse.request_batcher import (
+    RequestBatcher,
+    BatchStrategy,
+    batch_index_requests,
+    batch_stock_requests,
+)
 
 
 async def mock_async_request(value: int, delay_ms: int = 10):
@@ -21,5 +29,19 @@ def test_async_batching_simple():
             assert r.data == i * 2
 
     asyncio.run(run())
+
+
+def test_batch_helpers_normalize_date_inputs():
+    with patch("aynse.nse.request_batcher.RequestBatcher.batch_requests", return_value=[]) as mock_batch:
+        batch_stock_requests(["RELIANCE"], "2024-01-01", date(2024, 1, 5))
+        requests = mock_batch.call_args[0][0]
+        assert requests[0]["from_date"] == date(2024, 1, 1)
+        assert requests[0]["to_date"] == date(2024, 1, 5)
+
+    with patch("aynse.nse.request_batcher.RequestBatcher.batch_requests", return_value=[]) as mock_batch:
+        batch_index_requests(["NIFTY 50"], "2024-01-01", "2024-01-05")
+        requests = mock_batch.call_args[0][0]
+        assert requests[0]["from_date"] == date(2024, 1, 1)
+        assert requests[0]["to_date"] == date(2024, 1, 5)
 
 

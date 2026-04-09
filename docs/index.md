@@ -1,6 +1,6 @@
 # aynse
 
-A lean, modern Python library for fetching data from the National Stock Exchange (NSE) of India.
+A standardized Python library for working with National Stock Exchange (NSE) and RBI datasets in a predictable `records / dataframe / save` style.
 
 <div class="grid cards" markdown>
 
@@ -8,7 +8,7 @@ A lean, modern Python library for fetching data from the National Stock Exchange
 
     ---
 
-    Download OHLCV data for stocks, indices, and derivatives with automatic retry and caching.
+    Download canonical OHLCV-style records for stocks, indices, and derivatives with automatic retry and caching.
 
     [:octicons-arrow-right-24: Historical Data](historical.md)
 
@@ -16,7 +16,7 @@ A lean, modern Python library for fetching data from the National Stock Exchange
 
     ---
 
-    Real-time stock quotes, option chains, market status, and more.
+    Real-time quotes, option chains, market status, corporate events, and standardized live summaries.
 
     [:octicons-arrow-right-24: Live Data](live.md)
 
@@ -24,7 +24,7 @@ A lean, modern Python library for fetching data from the National Stock Exchange
 
     ---
 
-    Download daily bhavcopies for equity, F&O, and indices.
+    Work with bhavcopy and archive datasets as records, dataframes, or saved files.
 
     [:octicons-arrow-right-24: Historical Data](historical.md#download-bhavcopies)
 
@@ -40,14 +40,16 @@ A lean, modern Python library for fetching data from the National Stock Exchange
 
 ## Features
 
+- **Standardized contracts:** canonical Python-native records across history, archives, live, holidays, and RBI
 - **Historical data:** stocks, indices, derivatives (F&O)
-- **Bhavcopy:** equity, F&O, index downloads
-- **Live market data:** real-time quotes, option chains
+- **Archives:** bhavcopy, bulk deals, index constituents, and dataframe/save helpers
+- **Live market data:** real-time quotes, option chains, corporate announcements, actions, and results calendars
 - **CLI:** simple commands for quick downloads
 - **Resilient networking:** HTTP/2, connection pooling, retries with exponential backoff
 - **Rate limiting:** token bucket algorithm prevents API throttling
 - **Circuit breaker:** automatic failure detection and recovery
 - **Batching & streaming:** adaptive concurrency and low-memory processing
+- **Metadata & analytics:** supported dataset discovery, option chain summaries, returns, drawdowns, and event-window helpers
 - **Comprehensive type hints:** full typing support for IDE autocomplete
 
 ## Installation
@@ -78,7 +80,7 @@ df = stock_df(
     from_date=date(2024, 1, 1),
     to_date=date(2024, 1, 31)
 )
-print(df.head())
+print(df[["date", "symbol", "open", "close"]].head())
 ```
 
 ### Get Live Stock Quote
@@ -89,8 +91,9 @@ from aynse import NSELive
 live = NSELive()
 quote = live.stock_quote("INFY")
 
-print(f"Price: ₹{quote['priceInfo']['lastPrice']}")
-print(f"Change: {quote['priceInfo']['pChange']}%")
+print(f"Price: ₹{quote['price']['last']}")
+print(f"Change: {quote['price']['change_percent']}%")
+print(f"Company: {quote['company_name']}")
 ```
 
 ### Download Bhavcopy
@@ -101,6 +104,18 @@ from aynse import bhavcopy_save
 
 # Download equity bhavcopy
 bhavcopy_save(date(2024, 7, 26), "downloads/")
+```
+
+### Metadata And Analytics
+
+```python
+from aynse import dataset_capabilities, summarize_option_chain
+
+capabilities = dataset_capabilities()
+print(capabilities["historical"]["outputs"])
+
+chain = live.equities_option_chain("RELIANCE")
+print(summarize_option_chain(chain))
 ```
 
 ### CLI Usage

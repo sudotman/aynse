@@ -1,19 +1,18 @@
 """
-Historical policy rate data from RBI.
-
-This module fetches policy rate archives from the RBI website
-by scraping the policy rate archive page.
+Canonical RBI policy-rate helpers.
 """
 
 from __future__ import annotations
 
 import logging
+from datetime import date
 from io import StringIO
 from typing import Any, Dict, List
 
 import pandas as pd
 import requests
-from bs4 import BeautifulSoup
+
+from ..standard import UpstreamResponseError, clean_text, snake_case, to_float
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
@@ -21,93 +20,62 @@ logger.addHandler(logging.NullHandler())
 
 def policy_rate_archive(n: int = 10) -> List[Dict[str, Any]]:
     """
-    Fetch historical policy rates from RBI website.
-    
-    Scrapes the RBI policy rate archive page to extract historical
-    policy rate data including repo rate, reverse repo rate, etc.
-    
-    Args:
-        n: Number of past rate records to fetch (default: 10).
-            Higher values will fetch more historical data.
-           
-    Returns:
-        List of dictionaries containing policy rate data.
-        Each dictionary represents one rate announcement.
-        Column names are normalized to lowercase with underscores.
-        
-    Raises:
-        requests.RequestException: If the HTTP request fails
-        ValueError: If no data table is found on the page
-        
-    Example:
-        >>> rates = policy_rate_archive(n=5)
-        >>> for rate in rates:
-        ...     print(f"Date: {rate.get('date')}, Repo: {rate.get('repo_rate')}")
+    Return canonical RBI policy-rate snapshots.
+
+    RBI's public policy-rate page now exposes a current snapshot instead of the
+    older paginated archive used by the legacy implementation. We normalize that
+    snapshot into a stable list-of-records contract.
     """
-    base_url = "https://website.rbi.org.in/web/rbi/policy-rate-archive"
-    
-    params = {
-        "p_p_id": "com_rbi_policy_rate_archive_RBIPolicyRateArchivePortlet_INSTANCE_uwbl",
-        "p_p_lifecycle": "0",
-        "p_p_state": "normal",
-        "p_p_mode": "view",
-        "_com_rbi_policy_rate_archive_RBIPolicyRateArchivePortlet_INSTANCE_uwbl_cur": "1",
-        "_com_rbi_policy_rate_archive_RBIPolicyRateArchivePortlet_INSTANCE_uwbl_resetCur": "false",
-        "_com_rbi_policy_rate_archive_RBIPolicyRateArchivePortlet_INSTANCE_uwbl_delta": str(n),
-    }
-    
+    url = "https://website.rbi.org.in/web/rbi/policy-rate-archive"
     session = requests.Session()
-    
+    headers = {"User-Agent": "Mozilla/5.0", "Accept": "text/html,application/xhtml+xml"}
+
     try:
-        response = session.get(base_url, params=params, timeout=30)
+        response = session.get(url, timeout=30, headers=headers)
         response.raise_for_status()
-    except requests.RequestException as e:
-        logger.error(f"Failed to fetch policy rate archive: {e}")
-        raise
-    
-    soup = BeautifulSoup(response.content, "html.parser")
-    table_div = soup.find("div", class_="table-responsive")
-    
-    if not table_div:
-        logger.warning("No table-responsive div found on page")
-        return []
+    except requests.RequestException as exc:
+        logger.error("Failed to fetch RBI policy-rate page: %s", exc)
+        raise UpstreamResponseError(f"Unable to fetch RBI policy-rate page: {exc}") from exc
 
-    tables = table_div.find_all("table")
-    if not tables:
-        logger.warning("No tables found in table-responsive div")
-        return []
-
-    # Parse the first table using pandas
-    html_string = str(tables[0])
-    
     try:
-        df_list = pd.read_html(StringIO(html_string))
-        if not df_list:
-            return []
-        df = df_list[0]
-    except ValueError as e:
-        logger.error(f"Failed to parse HTML table: {e}")
-        return []
+        tables = pd.read_html(StringIO(response.text))
+    except ValueError as exc:
+        raise UpstreamResponseError("RBI policy-rate page did not contain readable tables") from exc
 
-    # Drop rows with all NaN values
-    df = df.dropna(how='all')
+    if not tables:
+        raise UpstreamResponseError("RBI policy-rate page returned no tables")
 
-    # Handle multi-level column headers
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = [
-            '_'.join(str(c) for c in col).strip()
-            for col in df.columns.values
-        ]
-    else:
-        df.columns = [str(col).strip() for col in df.columns]
+    rate_snapshot = _table_to_mapping(tables[0])
+    liquidity_snapshot = _table_to_mapping(tables[1]) if len(tables) > 1 else {}
 
-    # Normalize column names: lowercase, spaces to underscores, remove prefixes
-    df.columns = [
-        col.lower()
-        .replace(' ', '_')
-        .replace('unnamed:_0_level_0_', '')
-        .replace('unnamed:_1_level_0_', '')
-        for col in df.columns
-    ]
-    
-    return df.to_dict('records')
+    record = {
+        "snapshot_date": date.today(),
+        "policy_repo_rate": to_float(rate_snapshot.get("policy_repo_rate")),
+        "standing_deposit_facility_rate": to_float(rate_snapshot.get("standing_deposit_facility_rate")),
+        "marginal_standing_facility_rate": to_float(rate_snapshot.get("marginal_standing_facility_rate")),
+        "bank_rate": to_float(rate_snapshot.get("bank_rate")),
+        "fixed_reverse_repo_rate": to_float(rate_snapshot.get("fixed_reverse_repo_rate")),
+        "cash_reserve_ratio": to_float(liquidity_snapshot.get("crr")),
+        "statutory_liquidity_ratio": to_float(liquidity_snapshot.get("slr")),
+        "source": "rbi_policy_rate_page",
+    }
+
+    records = [record]
+    return records[: max(1, int(n))]
+
+
+def _table_to_mapping(frame: pd.DataFrame) -> Dict[str, Any]:
+    mapping: Dict[str, Any] = {}
+    for row in frame.itertuples(index=False):
+        values = list(row)
+        if len(values) < 2:
+            continue
+        key = snake_case(clean_text(values[0]) or "")
+        value = clean_text(values[1])
+        if not key:
+            continue
+        if value and value.startswith(":"):
+            value = clean_text(value[1:])
+        mapping[key] = value
+    return mapping
+

@@ -139,10 +139,10 @@ class TestNSECache(TestCase):
         if not d:
             pytest.skip("NSE returned empty stock history for stock_raw contract check")
         assert len(d) > 0
-        all_dates = [datetime.strptime(k["CH_TIMESTAMP"], "%Y-%m-%d").date() for k in d]
+        all_dates = [k["date"] for k in d]
         assert max(all_dates) <= to_date
         assert min(all_dates) >= from_date
-        assert d[-1]["CH_TIMESTAMP"] <= d[0]["CH_TIMESTAMP"]
+        assert d[0]["date"] <= d[-1]["date"]
         app_name = nse.APP_NAME + '-stock'
         # Use the J_CACHE_DIR set in setup_test
         cache_dir = os.path.join('/fakecache', app_name, app_name)
@@ -157,17 +157,10 @@ class TestNSECache(TestCase):
             pytest.skip("NSE returned empty stock history for stock_csv contract check")
         output = nse.stock_csv("SBIN", from_date, to_date)
         with open(output) as fp:
-            text = fp.read()
-            rows = [x.split(',') for x in text.split('\n')]
-        headers = [   "DATE", "SERIES",
-                        "OPEN", "HIGH",
-                        "LOW", "PREV. CLOSE",
-                        "LTP", "CLOSE",
-                        "VWAP", "52W H", "52W L",
-                        "VOLUME", "VALUE", "NO OF TRADES", "SYMBOL"]
-        assert headers == rows[0]
-        assert raw[0]['CH_TIMESTAMP'] == rows[1][0]
-        assert raw[0]['CH_OPENING_PRICE'] == int(rows[1][2])
+            reader = csv.DictReader(fp)
+            rows = list(reader)
+        assert rows[0]["date"] == raw[0]["date"].isoformat()
+        assert float(rows[0]["open"]) == raw[0]["open"]
 
     def test_stock_df(self):
         from_date = date(2001,1,15)
@@ -178,9 +171,9 @@ class TestNSECache(TestCase):
         df = nse.stock_df("SBIN", from_date, to_date)
         
         assert len(raw) == len(df)
-        assert "DATE" in df.columns
-        assert "OPEN" in df.columns
-        assert df['DATE'].iloc[0] >= df['DATE'].iloc[-1]
+        assert "date" in df.columns
+        assert "open" in df.columns
+        assert df['date'].iloc[0] <= df['date'].iloc[-1]
 
 class TestDerivatives(TestCase):
     def setUp(self):
@@ -252,5 +245,4 @@ def test_expiry_dates():
     # Test that for NIFTY we get weekly expiries (should be multiple per month)
     # NIFTY should have weekly expiries, so we should get several dates
     assert len(expiry_dts) >= 3
-
 

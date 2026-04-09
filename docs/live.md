@@ -1,6 +1,6 @@
 # Live Data
 
-The `NSELive` class provides real-time market data from NSE including stock quotes, option chains, market status, and more.
+The `NSELive` class exposes standardized live-market payloads instead of raw endpoint-shaped dicts. Quotes, option chains, market status, and announcements all use canonical top-level keys.
 
 ## Getting Started
 
@@ -17,20 +17,17 @@ live = NSELive()
 ```python
 quote = live.stock_quote("RELIANCE")
 
-# Access price information
-price_info = quote['priceInfo']
-print(f"Last Price: ₹{price_info['lastPrice']}")
-print(f"Change: {price_info['change']} ({price_info['pChange']}%)")
-print(f"Open: ₹{price_info['open']}")
-print(f"Day High: ₹{price_info['intraDayHighLow']['max']}")
-print(f"Day Low: ₹{price_info['intraDayHighLow']['min']}")
-print(f"Previous Close: ₹{price_info['previousClose']}")
+price = quote["price"]
+print(f"Last Price: ₹{price['last']}")
+print(f"Change: {price['change']} ({price['change_percent']}%)")
+print(f"Open: ₹{price['open']}")
+print(f"Day High: ₹{price['high']}")
+print(f"Day Low: ₹{price['low']}")
+print(f"Previous Close: ₹{price['previous_close']}")
 
-# Access company info
-info = quote['info']
-print(f"Company: {info['companyName']}")
-print(f"Industry: {info['industry']}")
-print(f"ISIN: {info['isin']}")
+print(f"Company: {quote['company_name']}")
+print(f"Industry: {quote['industry']}")
+print(f"ISIN: {quote['isin']}")
 ```
 
 ### F&O Quote
@@ -40,8 +37,9 @@ Get quote with F&O details:
 ```python
 fno_quote = live.stock_quote_fno("RELIANCE")
 
-print(f"Available Strike Prices: {fno_quote['strikePrices']}")
-print(f"Available Expiries: {fno_quote['expiryDates']}")
+details = fno_quote["derivative_details"]
+print(f"Available Strike Prices: {details['strike_prices'][:5]}")
+print(f"Available Expiries: {details['expiry_dates'][:3]}")
 ```
 
 ### Trade Info
@@ -51,13 +49,8 @@ Get detailed trading information:
 ```python
 trade_info = live.trade_info("RELIANCE")
 
-# Bulk/Block deals
-print(f"Bulk Deals: {trade_info['bulkBlockDeals']}")
-
-# Order book
-order_book = trade_info['marketDeptOrderBook']
-print(f"Total Buy Qty: {order_book['totalBuyQuantity']}")
-print(f"Total Sell Qty: {order_book['totalSellQuantity']}")
+print(f"Bulk Deals: {trade_info['bulk_block_deals']}")
+print(trade_info["metadata"])
 ```
 
 ## Market Status
@@ -65,8 +58,8 @@ print(f"Total Sell Qty: {order_book['totalSellQuantity']}")
 ```python
 status = live.market_status()
 
-for market in status['marketState']:
-    print(f"{market['market']}: {market['marketStatus']}")
+for market in status['markets']:
+    print(f"{market['market']}: {market['status']}")
 ```
 
 ## Option Chains
@@ -77,16 +70,14 @@ for market in status['marketState']:
 # NIFTY option chain (uses option-chain-v3; auto-selects first expiry)
 chain = live.index_option_chain("NIFTY")
 
-records = chain['records']
-print(f"Expiry Dates: {records['expiryDates']}")
-print(f"Strike Prices: {records['strikePrices']}")
+print(f"Expiry Dates: {chain['expiry_dates'][:3]}")
+print(f"Strike Prices: {chain['strike_prices'][:5]}")
+print(chain["summary"])
 
-# Get ATM (at-the-money) data
-atm = chain['filtered']['data']
-for strike in atm[:5]:
-    ce = strike.get('CE', {})
-    pe = strike.get('PE', {})
-    print(f"Strike {strike['strikePrice']}: CE OI={ce.get('openInterest', 0)}, PE OI={pe.get('openInterest', 0)}")
+for strike in chain["records"][:5]:
+    ce = strike.get("call") or {}
+    pe = strike.get("put") or {}
+    print(f"Strike {strike['strike_price']}: CE OI={ce.get('open_interest', 0)}, PE OI={pe.get('open_interest', 0)}")
 ```
 
 ### Equity Option Chain (v3)
@@ -95,16 +86,15 @@ for strike in atm[:5]:
 # RELIANCE option chain (uses option-chain-v3; auto-selects first expiry)
 chain = live.equities_option_chain("RELIANCE")
 
-records = chain['records']
-for strike_data in records['data'][:5]:
-    print(f"Strike: {strike_data['strikePrice']}")
+for strike_data in chain["records"][:5]:
+    print(f"Strike: {strike_data['strike_price']}")
 ```
 
 ### Currency Option Chain
 
 ```python
 chain = live.currency_option_chain("USDINR")
-print(f"Expiry Dates: {chain['records']['expiryDates']}")
+print(f"Expiry Dates: {chain['expiry_dates']}")
 ```
 
 ## Indices Data
@@ -117,19 +107,18 @@ indices = live.all_indices()
 print(f"Advances: {indices['advances']}")
 print(f"Declines: {indices['declines']}")
 
-for idx in indices['data'][:5]:
+for idx in indices['indices'][:5]:
     print(f"{idx['index']}: {idx['last']} ({idx['percentChange']}%)")
 ```
 
 ### Live Index Data
 
 ```python
-# Get NIFTY 50 data with all constituents
 nifty = live.live_index("NIFTY 50")
 
 print(f"NIFTY 50: {nifty['data'][0]['last']}")
-print(f"Advances: {nifty['advance']['advances']}")
-print(f"Declines: {nifty['advance']['declines']}")
+print(f"Advances: {nifty['advance']}")
+print(f"Declines: {nifty['decline']}")
 
 # Top gainers/losers
 for stock in nifty['data'][1:6]:
@@ -152,7 +141,6 @@ print(f"Advances: {preopen['advances']}")
 print(f"Declines: {preopen['declines']}")
 print(f"Unchanged: {preopen['unchanged']}")
 
-# Pre-open prices
 for stock in preopen['data'][:5]:
     meta = stock['metadata']
     print(f"{meta['symbol']}: ₹{meta['lastPrice']} ({meta['pChange']}%)")
@@ -160,18 +148,15 @@ for stock in preopen['data'][:5]:
 
 ## Chart/Tick Data
 
-Get intraday tick data for charting. NSE recently shifted these to their NextApi
-endpoints; the client handles the right URL/params for you.
+Get intraday tick data for charting. The canonical response exposes chart points directly under `points`.
 
 ```python
-# Stock tick data (equity) – uses getSymbolChartData under the hood
-ticks = live.tick_data("RELIANCE")          # default flag="1D"
-chart_data = ticks['grapthData']            # Note: NSE typo in response
+ticks = live.tick_data("RELIANCE")
+print(ticks["points"][:5])
 
-# Index tick data – uses getGraphChart with flag="1D"
 index_ticks = live.tick_data("NIFTY 50", indices=True)
+print(index_ticks["points"][:5])
 
-# Alternate timeframes (if needed)
 week_ticks = live.tick_data("RELIANCE", flag="5D")
 ```
 
@@ -179,7 +164,7 @@ week_ticks = live.tick_data("RELIANCE", flag="5D")
 
 ```python
 turnover = live.market_turnover()
-print(turnover)
+print(turnover["records"][:2])
 ```
 
 ## Derivatives Turnover
@@ -201,6 +186,7 @@ from datetime import date
 
 # All announcements
 announcements = live.corporate_announcements()
+print(announcements[:2])
 
 # Filter by date range
 announcements = live.corporate_announcements(
@@ -210,6 +196,11 @@ announcements = live.corporate_announcements(
 
 # Filter by symbol
 announcements = live.corporate_announcements(symbol="RELIANCE")
+actions = live.corporate_actions(symbol="RELIANCE")
+results = live.results_calendar(symbol="RELIANCE")
+
+print(actions[:1])
+print(results[:1])
 ```
 
 ## Trading Holidays
@@ -217,9 +208,8 @@ announcements = live.corporate_announcements(symbol="RELIANCE")
 ```python
 holidays = live.holiday_list()
 
-# CM (Capital Market) holidays
-for holiday in holidays.get('CM', []):
-    print(f"{holiday['tradingDate']}: {holiday['description']}")
+for holiday in holidays["markets"][:5]:
+    print(f"{holiday['date']}: {holiday['description']}")
 ```
 
 ## Bulk Operations
@@ -236,7 +226,7 @@ print(f"Successful: {results['summary']['successful']}")
 print(f"Failed: {results['summary']['failed']}")
 
 for symbol, data in results['success'].items():
-    print(f"{symbol}: {len(data['records']['data'])} strikes")
+    print(f"{symbol}: {len(data['records'])} strikes")
 ```
 
 ### Options Around Earnings
@@ -255,6 +245,7 @@ analysis = live.get_options_around_date(
 
 print(f"Primary Expiry: {analysis['primary_expiry']}")
 print(f"Relevant Expiries: {len(analysis['relevant_expiries'])}")
+print(analysis["analysis"]["summary"])
 ```
 
 ### Bulk Earnings Analysis
@@ -269,8 +260,15 @@ stocks_and_dates = [
 results = live.analyze_earnings_options(stocks_and_dates, max_workers=3)
 
 for symbol, analysis in results.items():
-    if 'error' not in analysis:
-        print(f"{symbol}: {analysis['analysis']['total_strikes']} strikes")
+    print(f"{symbol}: {analysis['analysis']['record_count']} strikes")
+```
+
+## Metadata
+
+```python
+metadata = live.metadata()
+print(metadata["supported_instruments"])
+print(metadata["supported_event_categories"])
 ```
 
 ## Caching Behavior

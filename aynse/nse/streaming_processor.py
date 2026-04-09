@@ -50,36 +50,19 @@ class StreamingProcessor:
         """
         results = []
 
-        with open(file_path, 'r', encoding=self.config.encoding, buffering=self.config.buffer_size) as file:
-            # Use streaming CSV reader for memory efficiency
-            csv_reader = csv.reader(file)
-
-            # Skip header if requested
+        with open(file_path, 'r', encoding=self.config.encoding, buffering=self.config.buffer_size, newline='') as file:
             if skip_header:
-                next(csv_reader, None)  # Skip header row
+                csv_reader = csv.DictReader(file)
+            else:
+                csv_reader = csv.DictReader(file, fieldnames=None)
 
             chunk = []
-            for row_num, row in enumerate(csv_reader):
-                # Store row as a dictionary with proper structure
-                # For now, use the row data directly as a dict
-                # In a real implementation, this would use the CSV headers
-                if len(row) >= 7:  # Ensure we have all expected columns
-                    row_dict = {
-                        'symbol': row[0],
-                        'date': row[1],
-                        'open': row[2],
-                        'high': row[3],
-                        'low': row[4],
-                        'close': row[5],
-                        'volume': row[6]
-                    }
-                    chunk.append(row_dict)
-
-                    # Process chunk when it reaches the configured size
-                    if len(chunk) >= self.config.chunk_size:
-                        result = processor_func(chunk)
-                        results.append(result)
-                        chunk = []  # Clear chunk to free memory
+            for row in csv_reader:
+                chunk.append(dict(row))
+                if len(chunk) >= self.config.chunk_size:
+                    result = processor_func(chunk)
+                    results.append(result)
+                    chunk = []
 
             # Process remaining data
             if chunk:
@@ -108,7 +91,7 @@ class StreamingProcessor:
 
         # Create string buffer for streaming
         csv_buffer = io.StringIO(csv_data)
-        csv_reader = csv.DictReader(csv_buffer) if skip_header else csv.DictReader(csv_buffer)
+        csv_reader = csv.DictReader(csv_buffer)
 
         chunk = []
         for row_num, row in enumerate(csv_reader):
@@ -142,42 +125,36 @@ class StreamingProcessor:
         results = []
 
         with open(file_path, 'r', encoding=self.config.encoding) as file:
-            # Read file line by line for memory efficiency
-            buffer = ""
+            first_non_empty = ""
+            while not first_non_empty:
+                position = file.tell()
+                line = file.readline()
+                if not line:
+                    break
+                first_non_empty = line.strip()
+            file.seek(0)
+
             chunk = []
+            if first_non_empty.startswith('['):
+                data = json.load(file)
+                for obj in data:
+                    chunk.append(obj)
+                    if len(chunk) >= self.config.chunk_size:
+                        result = processor_func(chunk)
+                        results.append(result)
+                        chunk = []
+            else:
+                for line in file:
+                    text = line.strip()
+                    if not text:
+                        continue
+                    obj = json.loads(text)
+                    chunk.append(obj)
+                    if len(chunk) >= self.config.chunk_size:
+                        result = processor_func(chunk)
+                        results.append(result)
+                        chunk = []
 
-            for line_num, line in enumerate(file):
-                buffer += line.strip()
-
-                # Try to parse complete JSON objects
-                try:
-                    while True:
-                        # Look for complete JSON objects
-                        start_idx = buffer.find('{')
-                        end_idx = buffer.find('}', start_idx) + 1
-
-                        if start_idx == -1 or end_idx == 0:
-                            break
-
-                        json_str = buffer[start_idx:end_idx]
-                        try:
-                            obj = json.loads(json_str)
-                            chunk.append(obj)
-                            buffer = buffer[end_idx:]
-                        except json.JSONDecodeError:
-                            break
-
-                        # Process chunk when it reaches size
-                        if len(chunk) >= self.config.chunk_size:
-                            result = processor_func(chunk)
-                            results.append(result)
-                            chunk = []
-
-                except Exception:
-                    # If parsing fails, continue reading
-                    continue
-
-            # Process remaining objects
             if chunk:
                 result = processor_func(chunk)
                 results.append(result)
@@ -212,35 +189,16 @@ class StreamingProcessor:
             target_file = csv_filename or csv_files[0]
 
             with zip_file.open(target_file) as csv_file:
-                # Read CSV in chunks
-                buffer = ""
+                wrapper = io.TextIOWrapper(csv_file, encoding=self.config.encoding, newline='')
+                reader = csv.DictReader(wrapper)
                 chunk = []
+                for row in reader:
+                    chunk.append(dict(row))
+                    if len(chunk) >= self.config.chunk_size:
+                        result = processor_func(chunk)
+                        results.append(result)
+                        chunk = []
 
-                while True:
-                    # Read in buffer-sized chunks
-                    data = csv_file.read(self.config.buffer_size)
-                    if not data:
-                        break
-
-                    buffer += data.decode(self.config.encoding)
-
-                    # Process complete lines
-                    lines = buffer.split('\n')
-                    buffer = lines[-1]  # Keep incomplete line for next iteration
-
-                    for line in lines[:-1]:  # Skip last (potentially incomplete) line
-                        if line.strip():
-                            # Parse CSV line (simplified - assumes no quoted commas)
-                            row_data = [field.strip() for field in line.split(',')]
-                            if len(row_data) > 1:  # Skip empty lines
-                                chunk.append({'data': row_data})
-
-                                if len(chunk) >= self.config.chunk_size:
-                                    result = processor_func(chunk)
-                                    results.append(result)
-                                    chunk = []
-
-                # Process remaining data
                 if chunk:
                     result = processor_func(chunk)
                     results.append(result)

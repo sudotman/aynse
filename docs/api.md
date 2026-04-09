@@ -1,12 +1,8 @@
 # API Reference
 
-This page contains the auto-generated API reference for `aynse`.
+This page lists the standardized public API for `aynse`.
 
-## NSE Module
-
-The main module for fetching NSE data.
-
-### Historical Data
+## Historical data
 
 ::: aynse.nse.history.stock_raw
     options:
@@ -78,9 +74,14 @@ The main module for fetching NSE data.
       show_root_heading: true
       show_source: false
 
-### Archives
+## Archive data
 
 ::: aynse.nse.archives.bhavcopy_raw
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: aynse.nse.archives.bhavcopy_df
     options:
       show_root_heading: true
       show_source: false
@@ -95,12 +96,22 @@ The main module for fetching NSE data.
       show_root_heading: true
       show_source: false
 
+::: aynse.nse.archives.full_bhavcopy_df
+    options:
+      show_root_heading: true
+      show_source: false
+
 ::: aynse.nse.archives.full_bhavcopy_save
     options:
       show_root_heading: true
       show_source: false
 
 ::: aynse.nse.archives.bhavcopy_fo_raw
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: aynse.nse.archives.bhavcopy_fo_df
     options:
       show_root_heading: true
       show_source: false
@@ -115,6 +126,11 @@ The main module for fetching NSE data.
       show_root_heading: true
       show_source: false
 
+::: aynse.nse.archives.bhavcopy_index_df
+    options:
+      show_root_heading: true
+      show_source: false
+
 ::: aynse.nse.archives.bhavcopy_index_save
     options:
       show_root_heading: true
@@ -125,12 +141,22 @@ The main module for fetching NSE data.
       show_root_heading: true
       show_source: false
 
+::: aynse.nse.archives.bulk_deals_df
+    options:
+      show_root_heading: true
+      show_source: false
+
 ::: aynse.nse.archives.bulk_deals_save
     options:
       show_root_heading: true
       show_source: false
 
 ::: aynse.nse.archives.index_constituent_raw
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: aynse.nse.archives.index_constituent_df
     options:
       show_root_heading: true
       show_source: false
@@ -150,7 +176,7 @@ The main module for fetching NSE data.
       show_root_heading: true
       show_source: false
 
-### Live Data
+## Live data
 
 ::: aynse.nse.live.NSELive
     options:
@@ -174,26 +200,41 @@ The main module for fetching NSE data.
         - pre_open_market
         - holiday_list
         - corporate_announcements
+        - corporate_actions
+        - results_calendar
         - bulk_equities_option_chain
         - get_options_around_date
         - analyze_earnings_options
+        - metadata
 
-## Holidays Module
+## Holidays and RBI
 
-::: aynse.holidays
+::: aynse.holidays.holiday_records
     options:
       show_root_heading: true
       show_source: false
-      members:
-        - holidays
-        - is_holiday
-        - is_trading_day
-        - get_trading_days
-        - count_trading_days
 
-## RBI Module
+::: aynse.holidays.holidays
+    options:
+      show_root_heading: true
+      show_source: false
 
-::: aynse.rbi.RBI
+::: aynse.holidays.is_holiday
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: aynse.holidays.is_trading_day
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: aynse.holidays.get_trading_days
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: aynse.holidays.count_trading_days
     options:
       show_root_heading: true
       show_source: false
@@ -203,44 +244,64 @@ The main module for fetching NSE data.
       show_root_heading: true
       show_source: false
 
-## HTTP Client
+## Metadata and analytics
 
-The library includes resilient HTTP clients with retry logic, rate limiting, and circuit breakers.
+::: aynse.catalog.supported_indices
+    options:
+      show_root_heading: true
+      show_source: false
 
-### NSEHttpClient
+::: aynse.catalog.supported_instruments
+    options:
+      show_root_heading: true
+      show_source: false
 
-```python
-from aynse.nse.http_client import NSEHttpClient
+::: aynse.catalog.supported_event_categories
+    options:
+      show_root_heading: true
+      show_source: false
 
-client = NSEHttpClient(
-    base_url="https://www.nseindia.com",
-    timeout=15.0,
-    max_connections=20,
-    rate_limit_per_sec=10
-)
+::: aynse.catalog.dataset_capabilities
+    options:
+      show_root_heading: true
+      show_source: false
 
-# Make requests
-response = client.get("/api/marketStatus")
-data = client.get_json("/api/marketStatus")
-```
+::: aynse.analytics.add_returns
+    options:
+      show_root_heading: true
+      show_source: false
 
-### Connection Pool
+::: aynse.analytics.add_rolling_volatility
+    options:
+      show_root_heading: true
+      show_source: false
 
-```python
-from aynse.nse.connection_pool import get_connection_pool
+::: aynse.analytics.add_drawdown
+    options:
+      show_root_heading: true
+      show_source: false
 
-pool = get_connection_pool()
-client = pool.get_client("https://www.nseindia.com")
+::: aynse.analytics.add_gap_metrics
+    options:
+      show_root_heading: true
+      show_source: false
 
-# The pool manages client lifecycle and reuse
-data = client.get_json("/api/marketStatus")
+::: aynse.analytics.add_volume_metrics
+    options:
+      show_root_heading: true
+      show_source: false
 
-# Get pool statistics
-stats = pool.get_pool_stats()
-print(f"Active clients: {stats['sync_clients']}")
-```
+::: aynse.analytics.summarize_option_chain
+    options:
+      show_root_heading: true
+      show_source: false
 
-## Request Batching
+::: aynse.analytics.analyze_event_window
+    options:
+      show_root_heading: true
+      show_source: false
+
+## Batching and streaming
 
 ::: aynse.nse.request_batcher.RequestBatcher
     options:
@@ -252,36 +313,12 @@ print(f"Active clients: {stats['sync_clients']}")
       show_root_heading: true
       show_source: false
 
-## Streaming Processor
-
 ::: aynse.nse.streaming_processor.StreamingProcessor
     options:
       show_root_heading: true
       show_source: false
 
 ::: aynse.nse.streaming_processor.StreamConfig
-    options:
-      show_root_heading: true
-      show_source: false
-
-## Utilities
-
-::: aynse.util.break_dates
-    options:
-      show_root_heading: true
-      show_source: false
-
-::: aynse.util.cached
-    options:
-      show_root_heading: true
-      show_source: false
-
-::: aynse.util.live_cache
-    options:
-      show_root_heading: true
-      show_source: false
-
-::: aynse.util.is_trading_day
     options:
       show_root_heading: true
       show_source: false

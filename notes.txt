@@ -1,0 +1,3 @@
+let's try exploring this:
+
+https://www.nseindia.com/api/NextApi/apiClient/GetQuoteApi?functionName=getSymbolDerivativesData&symbol=PNB

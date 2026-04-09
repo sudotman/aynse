@@ -42,17 +42,23 @@ from .nse import (
     register_stock_history_provider,
     # Archives functions
     bhavcopy_raw,
+    bhavcopy_df,
     bhavcopy_save,
     full_bhavcopy_raw,
+    full_bhavcopy_df,
     full_bhavcopy_save,
     bhavcopy_fo_raw,
+    bhavcopy_fo_df,
     bhavcopy_fo_save,
     bhavcopy_index_raw,
+    bhavcopy_index_df,
     bhavcopy_index_save,
     bulk_deals_raw,
+    bulk_deals_df,
     bulk_deals_save,
     expiry_dates,
     index_constituent_raw,
+    index_constituent_df,
     index_constituent_save,
     index_constituent_save_all,
     # Live data
@@ -82,8 +88,18 @@ from .nse import (
     create_data_generator,
 )
 
-from .holidays import holidays
+from .holidays import holidays, holiday_records
 from .rbi import RBI, policy_rate_archive
+from .catalog import dataset_capabilities, supported_event_categories, supported_indices, supported_instruments
+from .analytics import (
+    add_drawdown,
+    add_gap_metrics,
+    add_returns,
+    add_rolling_volatility,
+    add_volume_metrics,
+    analyze_event_window,
+    summarize_option_chain,
+)
 
 __all__ = [
     # Version info
@@ -107,17 +123,23 @@ __all__ = [
     "register_stock_history_provider",
     # Archives
     "bhavcopy_raw",
+    "bhavcopy_df",
     "bhavcopy_save",
     "full_bhavcopy_raw",
+    "full_bhavcopy_df",
     "full_bhavcopy_save",
     "bhavcopy_fo_raw",
+    "bhavcopy_fo_df",
     "bhavcopy_fo_save",
     "bhavcopy_index_raw",
+    "bhavcopy_index_df",
     "bhavcopy_index_save",
     "bulk_deals_raw",
+    "bulk_deals_df",
     "bulk_deals_save",
     "expiry_dates",
     "index_constituent_raw",
+    "index_constituent_df",
     "index_constituent_save",
     "index_constituent_save_all",
     # Live
@@ -147,7 +169,21 @@ __all__ = [
     "create_data_generator",
     # Holidays
     "holidays",
+    "holiday_records",
     # RBI
     "RBI",
     "policy_rate_archive",
+    # Metadata
+    "supported_indices",
+    "supported_instruments",
+    "supported_event_categories",
+    "dataset_capabilities",
+    # Analytics
+    "add_returns",
+    "add_rolling_volatility",
+    "add_drawdown",
+    "add_gap_metrics",
+    "add_volume_metrics",
+    "summarize_option_chain",
+    "analyze_event_window",
 ]

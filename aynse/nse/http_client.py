@@ -29,6 +29,8 @@ from tenacity import (
 import asyncio
 import logging
 
+from ..standard import UpstreamResponseError
+
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
 
@@ -248,14 +250,14 @@ class NSEHttpClient:
         ctype = resp.headers.get("content-type", "")
         if "application/json" not in ctype:
             # NSE sometimes serves HTML/blocked pages; force a retry by raising
-            raise httpx.HTTPError(f"Unexpected content-type: {ctype}", request=resp.request, response=resp)
+            raise UpstreamResponseError(f"Unexpected content-type: {ctype}")
         return resp.json()
 
     def post_json(self, path: str, json: Optional[Dict[str, Any]] = None) -> Any:
         resp = self._request_with_retry("POST", path, json=json)
         ctype = resp.headers.get("content-type", "")
         if "application/json" not in ctype:
-            raise httpx.HTTPError(f"Unexpected content-type: {ctype}", request=resp.request, response=resp)
+            raise UpstreamResponseError(f"Unexpected content-type: {ctype}")
         return resp.json()
 
 
@@ -370,14 +372,14 @@ class NSEAsyncHttpClient:
         resp = await self.get(path, params)
         ctype = resp.headers.get("content-type", "")
         if "application/json" not in ctype:
-            raise httpx.HTTPError(f"Unexpected content-type: {ctype}", request=resp.request, response=resp)
+            raise UpstreamResponseError(f"Unexpected content-type: {ctype}")
         return resp.json()
 
     async def post_json(self, path: str, json: Optional[Dict[str, Any]] = None) -> Any:
         resp = await self._request_with_retry("POST", path, json=json)
         ctype = resp.headers.get("content-type", "")
         if "application/json" not in ctype:
-            raise httpx.HTTPError(f"Unexpected content-type: {ctype}", request=resp.request, response=resp)
+            raise UpstreamResponseError(f"Unexpected content-type: {ctype}")
         return resp.json()
 
 

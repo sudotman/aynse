@@ -13,9 +13,11 @@ Reference:
 
 from __future__ import annotations
 
-from datetime import date, datetime
-from typing import List, Optional, Set
+from datetime import date, datetime, timedelta
+from typing import List, Optional, Set, Union
 import logging
+
+from .standard import DateLike, clean_text, coerce_date, coerce_month, coerce_year
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
@@ -158,9 +160,25 @@ def _get_all_holidays() -> Set[date]:
     return _HOLIDAYS_CACHE
 
 
+def holiday_records(
+    year: Optional[Union[int, str]] = None,
+    month: Optional[Union[int, str]] = None,
+) -> List[dict]:
+    """Return canonical holiday records."""
+    return [
+        {
+            "date": dt,
+            "weekday": dt.strftime("%A"),
+            "description": None,
+            "source": "builtin",
+        }
+        for dt in holidays(year=year, month=month)
+    ]
+
+
 def holidays(
-    year: Optional[int] = None,
-    month: Optional[int] = None
+    year: Optional[Union[int, str]] = None,
+    month: Optional[Union[int, str]] = None
 ) -> List[date]:
     """
     Get list of NSE trading holidays.
@@ -182,18 +200,20 @@ def holidays(
         >>> # Get holidays for January 2024
         >>> jan_2024 = holidays(year=2024, month=1)
     """
+    year_value = coerce_year(year)
+    month_value = coerce_month(month)
     all_holidays = list(_get_all_holidays())
     
-    if year is not None:
-        all_holidays = [d for d in all_holidays if d.year == year]
+    if year_value is not None:
+        all_holidays = [d for d in all_holidays if d.year == year_value]
     
-    if month is not None:
-        all_holidays = [d for d in all_holidays if d.month == month]
+    if month_value is not None:
+        all_holidays = [d for d in all_holidays if d.month == month_value]
     
     return sorted(all_holidays)
 
 
-def is_holiday(dt: date) -> bool:
+def is_holiday(dt: DateLike) -> bool:
     """
     Check if a date is an NSE trading holiday.
     
@@ -208,10 +228,10 @@ def is_holiday(dt: date) -> bool:
         >>> is_holiday(date(2024, 1, 26))  # Republic Day
         True
     """
-    return dt in _get_all_holidays()
+    return coerce_date(dt, "dt") in _get_all_holidays()
 
 
-def is_trading_day(dt: date) -> bool:
+def is_trading_day(dt: DateLike) -> bool:
     """
     Check if a date is a trading day.
     
@@ -231,16 +251,17 @@ def is_trading_day(dt: date) -> bool:
         False
     """
     # Check if weekend
-    if dt.weekday() >= 5:  # Saturday=5, Sunday=6
+    day = coerce_date(dt, "dt")
+    if day.weekday() >= 5:  # Saturday=5, Sunday=6
         return False
     
     # Check if holiday
-    return not is_holiday(dt)
+    return not is_holiday(day)
 
 
 def get_trading_days(
-    from_date: date,
-    to_date: date
+    from_date: DateLike,
+    to_date: DateLike
 ) -> List[date]:
     """
     Get all trading days in a date range.
@@ -256,25 +277,23 @@ def get_trading_days(
         >>> from datetime import date
         >>> trading_days = get_trading_days(date(2024, 1, 1), date(2024, 1, 31))
     """
-    if from_date > to_date:
+    start = coerce_date(from_date, "from_date")
+    end = coerce_date(to_date, "to_date")
+    if start > end:
         raise ValueError("from_date must be before or equal to to_date")
     
     result = []
-    current = from_date
+    current = start
     
-    while current <= to_date:
+    while current <= end:
         if is_trading_day(current):
             result.append(current)
-        current = date(
-            current.year,
-            current.month,
-            current.day
-        ) + __import__('datetime').timedelta(days=1)
+        current = current + timedelta(days=1)
     
     return result
 
 
-def count_trading_days(from_date: date, to_date: date) -> int:
+def count_trading_days(from_date: DateLike, to_date: DateLike) -> int:
     """
     Count the number of trading days in a date range.
     
@@ -288,7 +307,7 @@ def count_trading_days(from_date: date, to_date: date) -> int:
     return len(get_trading_days(from_date, to_date))
 
 
-def fetch_holidays_from_nse(year: Optional[int] = None) -> List[dict]:
+def fetch_holidays_from_nse(year: Optional[Union[int, str]] = None) -> List[dict]:
     """
     Fetch trading holidays from NSE API.
     
@@ -314,25 +333,41 @@ def fetch_holidays_from_nse(year: Optional[int] = None) -> List[dict]:
     try:
         live = NSELive()
         data = live.holiday_list()
-        
-        # Extract CM (Capital Market) holidays
-        cm_holidays = data.get('CM', [])
-        
-        if year is not None:
-            # Filter by year
-            cm_holidays = [
-                h for h in cm_holidays
-                if datetime.strptime(h.get('tradingDate', ''), '%d-%b-%Y').year == year
-            ]
-        
-        return cm_holidays
+        cm_holidays = data.get("markets", []) if isinstance(data, dict) else []
+        if not cm_holidays and isinstance(data, dict):
+            cm_holidays = data.get("CM", [])
+
+        year_value = coerce_year(year)
+        normalized = []
+        for holiday in cm_holidays:
+            holiday_date = coerce_date(
+                holiday.get("date") or holiday.get("tradingDate"),
+                "holiday date",
+            )
+            if year_value is not None and holiday_date.year != year_value:
+                continue
+            normalized.append(
+                {
+                    "date": holiday_date,
+                    "weekday": clean_text(holiday.get("weekday") or holiday.get("weekDay"))
+                    or holiday_date.strftime("%A"),
+                    "description": clean_text(
+                        holiday.get("description")
+                        or holiday.get("marketStatusMessage")
+                        or holiday.get("market")
+                    ),
+                    "source": "nse",
+                }
+            )
+
+        return normalized
         
     except Exception as e:
         logger.warning(f"Failed to fetch holidays from NSE: {e}")
         raise
 
 
-def add_holiday(dt: date) -> None:
+def add_holiday(dt: DateLike) -> None:
     """
     Add a holiday to the cache.
     
@@ -344,7 +379,7 @@ def add_holiday(dt: date) -> None:
     """
     # Ensure cache is initialized (this populates the global)
     holidays_set = _get_all_holidays()
-    holidays_set.add(dt)
+    holidays_set.add(coerce_date(dt, "dt"))
 
 
 def clear_holiday_cache() -> None:

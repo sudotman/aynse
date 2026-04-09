@@ -17,6 +17,8 @@ import logging
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
 
+from ..standard import coerce_date
+
 class BatchStrategy(Enum):
     """Different strategies for batching requests"""
     SEQUENTIAL = "sequential"  # Process batches one after another
@@ -312,8 +314,8 @@ class RequestBatcher:
 # Convenience functions for common batching scenarios
 
 def batch_stock_requests(symbols: List[str],
-                        from_date: str,
-                        to_date: str,
+                        from_date,
+                        to_date,
                         series: str = "EQ",
                         batcher: Optional[RequestBatcher] = None) -> List[BatchResult]:
     """
@@ -332,8 +334,11 @@ def batch_stock_requests(symbols: List[str],
     if batcher is None:
         batcher = RequestBatcher()
 
+    start = coerce_date(from_date, "from_date")
+    end = coerce_date(to_date, "to_date")
+
     requests = [
-        {"symbol": symbol, "from_date": from_date, "to_date": to_date, "series": series}
+        {"symbol": symbol, "from_date": start, "to_date": end, "series": series}
         for symbol in symbols
     ]
 
@@ -343,8 +348,8 @@ def batch_stock_requests(symbols: List[str],
     return batcher.batch_requests(requests, stock_csv, show_progress=False)
 
 def batch_index_requests(symbols: List[str],
-                        from_date: str,
-                        to_date: str,
+                        from_date,
+                        to_date,
                         batcher: Optional[RequestBatcher] = None) -> List[BatchResult]:
     """
     Batch multiple index data requests.
@@ -361,8 +366,11 @@ def batch_index_requests(symbols: List[str],
     if batcher is None:
         batcher = RequestBatcher()
 
+    start = coerce_date(from_date, "from_date")
+    end = coerce_date(to_date, "to_date")
+
     requests = [
-        {"symbol": symbol, "from_date": from_date, "to_date": to_date}
+        {"symbol": symbol, "from_date": start, "to_date": end}
         for symbol in symbols
     ]
 
@@ -386,7 +394,18 @@ def batch_derivatives_requests(requests_data: List[Dict[str, Any]],
     if batcher is None:
         batcher = RequestBatcher()
 
+    normalized_requests = []
+    for request in requests_data:
+        item = dict(request)
+        if "from_date" in item:
+            item["from_date"] = coerce_date(item["from_date"], "from_date")
+        if "to_date" in item:
+            item["to_date"] = coerce_date(item["to_date"], "to_date")
+        if "expiry_date" in item:
+            item["expiry_date"] = coerce_date(item["expiry_date"], "expiry_date")
+        normalized_requests.append(item)
+
     # Import here to avoid circular imports
     from .history import derivatives_csv
 
-    return batcher.batch_requests(requests_data, derivatives_csv, show_progress=False)
+    return batcher.batch_requests(normalized_requests, derivatives_csv, show_progress=False)

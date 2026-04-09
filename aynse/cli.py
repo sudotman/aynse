@@ -609,20 +609,18 @@ def quote_command(symbol: str) -> None:
     try:
         live = NSELive()
         quote = live.stock_quote(symbol)
-        
-        info = quote.get('info', {})
-        price_info = quote.get('priceInfo', {})
+        price_info = quote.get('price', {})
         
         click.echo()
-        click.echo(f"Symbol: {info.get('symbol', symbol)}")
-        click.echo(f"Company: {info.get('companyName', 'N/A')}")
+        click.echo(f"Symbol: {quote.get('symbol', symbol)}")
+        click.echo(f"Company: {quote.get('company_name', 'N/A')}")
         click.echo()
-        click.echo(f"Last Price: ₹{price_info.get('lastPrice', 'N/A')}")
-        click.echo(f"Change: {price_info.get('change', 'N/A')} ({price_info.get('pChange', 'N/A')}%)")
+        click.echo(f"Last Price: ₹{price_info.get('last', 'N/A')}")
+        click.echo(f"Change: {price_info.get('change', 'N/A')} ({price_info.get('change_percent', 'N/A')}%)")
         click.echo(f"Open: ₹{price_info.get('open', 'N/A')}")
-        click.echo(f"High: ₹{price_info.get('intraDayHighLow', {}).get('max', 'N/A')}")
-        click.echo(f"Low: ₹{price_info.get('intraDayHighLow', {}).get('min', 'N/A')}")
-        click.echo(f"Prev Close: ₹{price_info.get('previousClose', 'N/A')}")
+        click.echo(f"High: ₹{price_info.get('high', 'N/A')}")
+        click.echo(f"Low: ₹{price_info.get('low', 'N/A')}")
+        click.echo(f"Prev Close: ₹{price_info.get('previous_close', 'N/A')}")
         
     except Exception as e:
         click.echo(click.style(f"✗ Error: {e}", fg='red'), err=True)

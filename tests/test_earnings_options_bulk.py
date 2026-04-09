@@ -187,14 +187,14 @@ class TestEarningsOptionsBulk:
                 # Validate response structure
                 assert isinstance(result, dict), f"Expected dict response for {stock}"
                 assert 'records' in result, f"No 'records' key in response for {stock}"
-                assert 'data' in result['records'], f"No 'data' in records for {stock}"
+                assert isinstance(result['records'], list), f"Expected canonical records list for {stock}"
                 
-                data = result['records']['data']
+                data = result['records']
                 assert len(data) > 0, f"No options data available for {stock}"
                 
                 # Check data structure
                 sample_option = data[0]
-                required_fields = ['strikePrice', 'expiryDate']
+                required_fields = ['strike_price', 'expiry_date']
                 for field in required_fields:
                     assert field in sample_option, f"Missing {field} in options data for {stock}"
                 
@@ -366,7 +366,7 @@ class TestEarningsOptionsBulk:
                 return {
                     'stock': stock,
                     'success': True,
-                    'contracts': len(result.get('records', {}).get('data', [])) if result else 0,
+                    'contracts': len(result.get('records', [])) if result else 0,
                     'error': None
                 }
             except Exception as e:
@@ -441,7 +441,7 @@ class TestEarningsOptionsBulk:
             live_options = self.nse_live.equities_option_chain(stock)
             
             if live_options and 'records' in live_options:
-                contracts_count = len(live_options['records'].get('data', []))
+                contracts_count = len(live_options['records'])
                 print(f"✅ Found {contracts_count} live options contracts")
                 workflow_results['steps'].append({
                     'step': 'live_options',

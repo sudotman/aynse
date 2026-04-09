@@ -2,16 +2,32 @@
 
 ## Download Bhavcopies
 
-You can download bhavcopies for stocks, indices, and futures & options using `aynse`. The example below shows how to download different bhavcopies for January 1, 2024, and save them to a directory in CSV format.
+`aynse` standardizes archive datasets into the same three shapes used elsewhere in the library:
+
+- `*_raw(...)` returns canonical records
+- `*_df(...)` returns a dataframe
+- `*_save(...)` writes a file and returns its path
+
+The example below shows how to work with bhavcopy data for January 1, 2024.
 
 ```python
 from datetime import date
-from aynse.nse import bhavcopy_save, full_bhavcopy_save, bhavcopy_fo_save, bhavcopy_index_save
+from aynse.nse import (
+    bhavcopy_raw,
+    bhavcopy_df,
+    bhavcopy_save,
+    full_bhavcopy_df,
+    bhavcopy_fo_df,
+    bhavcopy_index_df,
+)
 
-bhavcopy_save(date(2024, 1, 1), "/path/to/directory")
-full_bhavcopy_save(date(2024, 1, 1), "/path/to/directory")
-bhavcopy_fo_save(date(2024, 1, 1), "/path/to/directory")
-bhavcopy_index_save(date(2024, 1, 1), "/path/to/directory")
+records = bhavcopy_raw(date(2024, 1, 1))
+df = bhavcopy_df(date(2024, 1, 1))
+path = bhavcopy_save(date(2024, 1, 1), "/path/to/directory")
+
+full_df = full_bhavcopy_df(date(2024, 1, 1))
+fo_df = bhavcopy_fo_df(date(2024, 1, 1))
+index_df = bhavcopy_index_df(date(2024, 1, 1))
 ```
 
 > **Note:** The difference between `bhavcopy_save` and `full_bhavcopy_save` is that the full bhavcopy also includes the percentage of volume that was for delivery.
@@ -21,14 +37,20 @@ bhavcopy_index_save(date(2024, 1, 1), "/path/to/directory")
 Download the constituent stocks of various NSE indices.
 
 ```python
-from aynse.nse import index_constituent_save, index_constituent_save_all, index_constituent_raw
+from aynse.nse import (
+    index_constituent_df,
+    index_constituent_raw,
+    index_constituent_save,
+    index_constituent_save_all,
+)
 
 # Download constituents for a specific index
 index_constituent_save("nifty50", "/path/to/directory")
 
-# Download raw constituents data as string
-raw_data = index_constituent_raw("nifty50")
-print(raw_data)
+# Load canonical constituent records
+records = index_constituent_raw("nifty50")
+df = index_constituent_df("nifty50")
+print(df.head())
 
 # Download constituents for all available indices
 index_constituent_save_all("/path/to/directory")
@@ -40,12 +62,13 @@ Download bulk deals data for specific date ranges using the new bulk deals API.
 
 ```python
 from datetime import date
-from aynse.nse import bulk_deals_raw, bulk_deals_save
+from aynse.nse import bulk_deals_df, bulk_deals_raw, bulk_deals_save
 
-# Download bulk deals data as JSON for a date range
+# Download bulk deals records for a date range
 bulk_data = bulk_deals_raw(from_date=date(2024, 7, 1), 
                           to_date=date(2024, 7, 31))
-print(f"Found {len(bulk_data['data'])} bulk deals")
+print(f"Found {len(bulk_data)} bulk deals")
+print(bulk_deals_df(date(2024, 7, 1), date(2024, 7, 31)).head())
 
 # Save bulk deals data to a JSON file
 bulk_deals_save(from_date=date(2024, 7, 1), 
@@ -59,10 +82,10 @@ bulk_deals_save(from_date=date(2024, 7, 1),
 from datetime import date
 from aynse.nse import stock_csv, stock_df
 
-# Download as pandas dataframe
+# Download as pandas dataframe with canonical columns
 df = stock_df(symbol="RELIANCE", from_date=date(2024, 1, 1),
               to_date=date(2024, 1, 31), series="EQ")
-print(df.head())
+print(df[["date", "symbol", "open", "close"]].head())
 
 # Download data and save to a CSV file
 stock_csv(symbol="RELIANCE", from_date=date(2024, 1, 1),
@@ -86,7 +109,7 @@ print(get_stock_history_backend())
 
 # Optional custom backend (broker/internal API)
 def custom_provider(symbol, from_date, to_date, series):
-    # Return list[dict] compatible with stock_raw schema
+    # Return list[dict] compatible with the canonical stock_raw schema
     return []
 
 register_stock_history_provider(custom_provider)
@@ -112,7 +135,7 @@ from aynse.nse import index_csv, index_df, index_pe_df
 # Download as pandas dataframe
 df = index_df(symbol="NIFTY 50", from_date=date(2024, 1, 1),
               to_date=date(2024, 1, 31))
-print(df.head())
+print(df[["date", "symbol", "close"]].head())
 
 # Download as a CSV file
 index_csv(symbol="NIFTY 50", from_date=date(2024, 1, 1),
@@ -155,7 +178,8 @@ Use `derivatives_df` to download historical data for a given contract into a pan
 ```python
 def derivatives_df(symbol, from_date, to_date, expiry_date, instrument_type, option_type, strike_price):
     """
-    Downloads historical data for a given contract into a pandas dataframe.
+    Downloads historical data for a given contract into a pandas dataframe
+    using canonical derivative fields.
 
     Args:
         symbol (str): Stock symbol (e.g., "SBIN" or "NIFTY").

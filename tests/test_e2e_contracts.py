@@ -1,76 +1,89 @@
 """
-End-to-end contract tests for core aynse output schemas.
-
-These tests focus on deterministic schema/sanity checks and avoid
-depending on live market data endpoints.
+End-to-end contract tests for the standardized aynse API surface.
 """
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 
-from aynse.holidays import holidays, is_trading_day, get_trading_days
+from aynse.analytics import add_returns, summarize_option_chain
+from aynse.catalog import dataset_capabilities, supported_event_categories
+from aynse.holidays import holiday_records, holidays, is_trading_day, get_trading_days
 from aynse.nse.streaming_processor import StreamingProcessor, StreamConfig
 
 
-def test_stock_contract_schema(sample_stock_data):
-    """Validate stock payload schema + basic price sanity."""
-    required_fields = {
-        "CH_TIMESTAMP",
-        "CH_SYMBOL",
-        "CH_OPENING_PRICE",
-        "CH_TRADE_HIGH_PRICE",
-        "CH_TRADE_LOW_PRICE",
-        "CH_CLOSING_PRICE",
+def test_stock_contract_schema():
+    rows = [
+        {
+            "date": date(2024, 1, 15),
+            "symbol": "RELIANCE",
+            "series": "EQ",
+            "open": 2500.0,
+            "high": 2550.0,
+            "low": 2480.0,
+            "previous_close": 2490.0,
+            "last_price": 2528.0,
+            "close": 2530.0,
+            "vwap": 2515.5,
+            "week_52_high": 2800.0,
+            "week_52_low": 2200.0,
+            "volume": 5000000,
+            "turnover": 12575000000.0,
+            "trades": 250000,
+        }
+    ]
+    row = rows[0]
+    required = {"date", "symbol", "open", "high", "low", "close", "volume"}
+    assert required.issubset(row.keys())
+    assert row["low"] <= row["open"] <= row["high"]
+    assert row["low"] <= row["close"] <= row["high"]
+
+
+def test_index_contract_schema():
+    row = {
+        "date": date(2024, 1, 15),
+        "symbol": "NIFTY 50",
+        "open": 21500.0,
+        "high": 21650.0,
+        "low": 21450.0,
+        "close": 21600.0,
     }
-    for row in sample_stock_data:
-        assert required_fields.issubset(row.keys())
-    latest = sample_stock_data[0]
-    assert latest["CH_SYMBOL"]
-    assert latest["CH_TRADE_LOW_PRICE"] <= latest["CH_OPENING_PRICE"] <= latest["CH_TRADE_HIGH_PRICE"]
-    assert latest["CH_TRADE_LOW_PRICE"] <= latest["CH_CLOSING_PRICE"] <= latest["CH_TRADE_HIGH_PRICE"]
-    assert latest["CH_TOT_TRADED_QTY"] > 0
+    assert row["symbol"] == "NIFTY 50"
+    assert isinstance(row["open"], float)
+    assert isinstance(row["close"], float)
 
 
-def test_index_contract_schema(sample_index_data):
-    """Validate index payload schema + chronological data formatting."""
-    required_fields = {"INDEX_NAME", "OPEN", "HIGH", "LOW", "CLOSE"}
-    for row in sample_index_data:
-        assert required_fields.issubset(row.keys())
-    assert sample_index_data[0]["INDEX_NAME"] == "NIFTY 50"
-    assert isinstance(sample_index_data[0]["OPEN"], float)
-    assert isinstance(sample_index_data[0]["CLOSE"], float)
-
-
-def test_bhavcopy_csv_contract(sample_bhavcopy_csv):
-    """Validate CSV output contains required headers and data rows."""
-    expected_headers = ["SYMBOL", "SERIES", "OPEN", "CLOSE", "TIMESTAMP"]
-    header_line = sample_bhavcopy_csv.strip().split("\n", maxsplit=1)[0]
-    headers = [h.strip() for h in header_line.split(",")]
-    for key in expected_headers:
-        assert key in headers
-    rows = [line for line in sample_bhavcopy_csv.strip().split("\n") if line]
-    assert len(rows) >= 2
-
-
-def test_live_quote_contract_schema(sample_live_quote):
-    """Validate live quote structure and numeric sanity."""
-    info = sample_live_quote["info"]
-    price = sample_live_quote["priceInfo"]
-
-    assert info["symbol"]
-    assert info["isin"].startswith("INE")
-    assert isinstance(price["lastPrice"], (int, float))
-    assert isinstance(price["pChange"], (int, float))
-    assert price["intraDayHighLow"]["min"] <= price["lastPrice"] <= price["intraDayHighLow"]["max"]
+def test_live_quote_contract_schema():
+    quote = {
+        "symbol": "RELIANCE",
+        "company_name": "Reliance Industries Limited",
+        "isin": "INE002A01018",
+        "price": {
+            "last": 2530.0,
+            "change": 40.0,
+            "change_percent": 1.61,
+            "open": 2500.0,
+            "high": 2550.0,
+            "low": 2480.0,
+            "previous_close": 2490.0,
+        },
+        "week_range": {"high": 2800.0, "low": 2200.0},
+    }
+    assert quote["symbol"]
+    assert quote["isin"].startswith("INE")
+    assert isinstance(quote["price"]["last"], (int, float))
+    assert quote["price"]["low"] <= quote["price"]["last"] <= quote["price"]["high"]
 
 
 def test_holidays_trading_days_contract():
-    """Validate holidays and trading-day utilities remain internally consistent."""
     holidays_2024 = holidays(year=2024)
     assert len(holidays_2024) > 0
     assert date(2024, 1, 26) in holidays_2024
     assert is_trading_day(date(2024, 1, 15)) is True
+
+    records = holiday_records(year=2024, month=1)
+    assert records[0]["date"].year == 2024
+    assert "weekday" in records[0]
 
     trading_days = get_trading_days(date(2024, 1, 15), date(2024, 1, 19))
     assert trading_days[0] == date(2024, 1, 15)
@@ -79,7 +92,6 @@ def test_holidays_trading_days_contract():
 
 
 def test_streaming_contract_sanity():
-    """Validate streaming processor contract on representative CSV input."""
     processor = StreamingProcessor(StreamConfig(chunk_size=2))
     csv_data = """symbol,date,open,high,low,close,volume
 RELIANCE,2024-01-15,2500,2550,2480,2530,5000000
@@ -89,3 +101,30 @@ INFY,2024-01-15,1550,1580,1540,1570,3500000
 
     total_rows = processor.process_csv_string(csv_data, lambda chunk: len(chunk))
     assert total_rows == 3
+
+
+def test_analytics_and_metadata_contracts():
+    enriched = add_returns(
+        [
+            {"date": date(2024, 1, 1), "close": 100.0},
+            {"date": date(2024, 1, 2), "close": 110.0},
+        ]
+    )
+    assert enriched[-1]["return_percent"] == 10.0
+
+    chain = {
+        "symbol": "RELIANCE",
+        "underlying_value": 1330.0,
+        "records": [
+            {"strike_price": 1300.0, "call": {"open_interest": 1000}, "put": {"open_interest": 500}},
+            {"strike_price": 1350.0, "call": {"open_interest": 800}, "put": {"open_interest": 1400}},
+        ],
+    }
+    summary = summarize_option_chain(chain)
+    assert summary["record_count"] == 2
+    assert summary["put_call_ratio"] == 1900 / 1800
+
+    capabilities = dataset_capabilities()
+    assert "historical" in capabilities
+    assert "analytics" in capabilities
+    assert "results" in supported_event_categories()

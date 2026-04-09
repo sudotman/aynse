@@ -13,6 +13,22 @@ import gzip
 import pandas as pd
 import requests
 from io import StringIO
+from ..standard import (
+    DateLike,
+    DataUnavailableError,
+    UpstreamResponseError,
+    coerce_date,
+    dataframe_from_records,
+    normalize_name,
+    parse_date_maybe,
+    records_to_csv_text,
+    snake_case,
+    sort_by_date,
+    to_float,
+    to_int,
+    write_records_csv,
+    write_records_json,
+)
 from .connection_pool import get_connection_pool
 from .http_client import NSEHttpClient
 def unzip(function):
@@ -55,6 +71,34 @@ class NSEArchives:
                 "bhavcopy_fo": "/content/historical/DERIVATIVES/{yyyy}/{MMM}/fo{dd}{MMM}{yyyy}bhav.csv.zip"
             }
         # Clients handle priming internally; no explicit setup required
+
+    def _csv_rows(self, csv_text: str) -> list[dict]:
+        reader = csv.DictReader(csv_text.splitlines())
+        rows = []
+        for row in reader:
+            normalized = {}
+            for key, value in row.items():
+                normalized[snake_case(key)] = value.strip() if isinstance(value, str) else value
+            rows.append(normalized)
+        return rows
+
+    def _coerce_archive_row(self, row: dict) -> dict:
+        normalized = dict(row)
+        for key in list(normalized.keys()):
+            lower = key.lower()
+            if "date" in lower or lower in {"timestamp", "date1"}:
+                parsed = parse_date_maybe(normalized[key])
+                normalized[key] = parsed or normalized[key]
+            elif any(token in lower for token in ("price", "open", "high", "low", "close", "value", "vwap", "yield")):
+                converted = to_float(normalized[key])
+                normalized[key] = converted if converted is not None else normalized[key]
+            elif any(token in lower for token in ("qty", "quantity", "volume", "trades", "interest", "contracts")):
+                converted = to_int(normalized[key])
+                normalized[key] = converted if converted is not None else normalized[key]
+        return normalized
+
+    def _canonical_csv_records(self, csv_text: str) -> list[dict]:
+        return [self._coerce_archive_row(row) for row in self._csv_rows(csv_text)]
         
     def _setup_nse_session(self):
         """Deprecated - retained for compatibility; clients self-prime."""
@@ -180,23 +224,14 @@ class NSEArchives:
             raise Exception(error_msg)
 
 
-    def bhavcopy_raw(self, dt, as_dataframe=False):
-        """Downloads raw bhavcopy text for a specific date
+    def bhavcopy_raw(self, dt: DateLike):
+        """Return canonical equity bhavcopy records for a specific date.
 
         Uses new NSE API endpoints with date-based format switching.
         - Before July 8, 2024: Uses old CSV format API
         - After July 8, 2024: Uses new ZIP format API with different structure
-
-        Issues identified:
-        - Complex nested ZIP processing could be optimized
-        - Large files loaded entirely into memory
-        - No streaming for large files
-        - Repeated file extension checks
-
-        Args:
-            dt (date): Date for bhavcopy
-            as_dataframe (bool): If True, returns a pandas DataFrame. If False, returns CSV text.
         """
+        dt = coerce_date(dt, "dt")
         if dt < self.cutoff_date:
             response = self._get_old_bhavcopy(dt)
         else:
@@ -205,7 +240,7 @@ class NSEArchives:
         if response.status_code != 200:
             if "file not available" in response.text.lower():
                 raise FileNotFoundError(f"Bhavcopy not available for {dt.strftime('%d-%m-%Y')}")
-            raise Exception(f"API request failed with status code {response.status_code}: {response.text}")
+            raise UpstreamResponseError(f"Bhavcopy request failed with status {response.status_code}")
 
         try:
             file_content = self._handle_bhavcopy_response(response)
@@ -231,38 +266,30 @@ class NSEArchives:
                             return csv_file.read().decode('utf-8')
 
             csv_text = extract_csv_from_zip(file_content)
-
-            if as_dataframe:
-                return pd.read_csv(StringIO(csv_text))
-            return csv_text
+            return self._canonical_csv_records(csv_text)
         except Exception as e:
-            raise Exception(f"Error processing bhavcopy data for {dt.strftime('%d-%m-%Y')}: {str(e)}")
+            raise UpstreamResponseError(f"Error processing bhavcopy data for {dt.strftime('%d-%m-%Y')}: {str(e)}")
+
+    def bhavcopy_df(self, dt: DateLike):
+        return dataframe_from_records(self.bhavcopy_raw(dt))
+
     def bhavcopy_save(self, dt, dest, skip_if_present=True):
-        """Downloads and saves raw bhavcopy csv file for a specific date
-        
-        Uses new NSE API endpoints with automatic fallback to old archives.
-        """
+        """Save canonical equity bhavcopy records to CSV."""
+        dt = coerce_date(dt, "dt")
         fmt = "cm%d%b%Ybhav.csv"
         fname = os.path.join(dest, dt.strftime(fmt))
         if os.path.isfile(fname) and skip_if_present:
             return fname
-        
-        # Use new method that handles both old and new formats
-        text = self.bhavcopy_raw(dt)
-          # Ensure we got string data
-        if isinstance(text, bytes):
-            text = text.decode('utf-8')
-            
-        with open(fname, 'w', newline='') as fp:
-            fp.write(text)
-            return fname
+        records = self.bhavcopy_raw(dt)
+        return write_records_csv(fname, records)
     
-    def full_bhavcopy_raw(self, dt):
+    def full_bhavcopy_raw(self, dt: DateLike):
         """
         Downloads full raw bhavcopy text for a specific date.
         This uses the new API endpoint and works for all dates without a cutoff.
         The endpoint directly returns the CSV content.
         """
+        dt = coerce_date(dt, "dt")
         date_str = dt.strftime('%d-%b-%Y')
         url = f"{self.nse_api_url}/reports"
         params = {
@@ -280,28 +307,30 @@ class NSEArchives:
                  raise FileNotFoundError(f"Full Bhavcopy not available for {dt.strftime('%d-%m-%Y')}")
             response.raise_for_status()
 
-        # The response is expected to be the CSV content directly
-        return response.text
+        return self._canonical_csv_records(response.text)
+
+    def full_bhavcopy_df(self, dt: DateLike):
+        return dataframe_from_records(self.full_bhavcopy_raw(dt))
 
     def full_bhavcopy_save(self, dt, dest, skip_if_present=True):
+        dt = coerce_date(dt, "dt")
         fmt = "sec_bhavdata_full_%d%b%Y.csv"
         fname = os.path.join(dest, dt.strftime(fmt))
         if os.path.isfile(fname) and skip_if_present:
             return fname
-        text = self.full_bhavcopy_raw(dt)
-        with open(fname, 'w', newline='') as fp:
-            fp.write(text)
-        return fname
+        return write_records_csv(fname, self.full_bhavcopy_raw(dt))
 
-    def bulk_deals_raw(self, from_date: date, to_date: date):
+    def bulk_deals_raw(self, from_date: DateLike, to_date: DateLike):
         """
         Downloads bulk deals for a given date range.
         :param from_date: From date
         :param to_date: To date
         :return: JSON response from the API
         """
-        from_date_str = from_date.strftime('%d-%m-%Y')
-        to_date_str = to_date.strftime('%d-%m-%Y')
+        from_dt = coerce_date(from_date, "from_date")
+        to_dt = coerce_date(to_date, "to_date")
+        from_date_str = from_dt.strftime('%d-%m-%Y')
+        to_date_str = to_dt.strftime('%d-%m-%Y')
         
         url = f"{self.nse_api_url}/historicalOR/bulk-block-short-deals"
         params = {
@@ -311,9 +340,16 @@ class NSEArchives:
         }
         
         data = self.client_nse.get_json(url, params=params)
-        return data
+        rows = data.get("data", []) if isinstance(data, dict) else []
+        normalized = []
+        for row in rows:
+            normalized.append({snake_case(key): value for key, value in row.items()})
+        return normalized
+
+    def bulk_deals_df(self, from_date: DateLike, to_date: DateLike):
+        return dataframe_from_records(self.bulk_deals_raw(from_date, to_date))
     
-    def bulk_deals_save(self, from_date: date, to_date: date, dest: str):
+    def bulk_deals_save(self, from_date: DateLike, to_date: DateLike, dest: str):
         """
         Saves bulk deals for a given date range to a JSON file.
         :param from_date: From date
@@ -321,14 +357,15 @@ class NSEArchives:
         :param dest: Destination directory
         :return: Path to the saved file
         """
-        data = self.bulk_deals_raw(from_date, to_date)
-        fname = os.path.join(dest, f"bulk_deals_{from_date.strftime('%Y%m%d')}_{to_date.strftime('%Y%m%d')}.json")
-        with open(fname, 'w') as fp:
-            json.dump(data, fp)
-        return fname
+        from_dt = coerce_date(from_date, "from_date")
+        to_dt = coerce_date(to_date, "to_date")
+        data = self.bulk_deals_raw(from_dt, to_dt)
+        fname = os.path.join(dest, f"bulk_deals_{from_dt.strftime('%Y%m%d')}_{to_dt.strftime('%Y%m%d')}.json")
+        return write_records_json(fname, data)
 
-    def bhavcopy_fo_raw(self, dt):
-        """Downloads raw F&O bhavcopy text for a specific date"""
+    def bhavcopy_fo_raw(self, dt: DateLike):
+        """Return canonical F&O bhavcopy records for a specific date."""
+        dt = coerce_date(dt, "dt")
         if dt < self.cutoff_date:
             response = self._get_old_bhavcopy_fo(dt)
         else:
@@ -359,7 +396,7 @@ class NSEArchives:
                             
                             fname = csv_files[0]
                             with nested_zf.open(fname) as fp_bh:
-                                return fp_bh.read().decode('utf-8')
+                                return self._canonical_csv_records(fp_bh.read().decode('utf-8'))
                 
                 csv_files = [f for f in zf.namelist() if f.lower().endswith('.csv')]
                 if not csv_files:
@@ -367,21 +404,21 @@ class NSEArchives:
                     
                 fname = csv_files[0]
                 with zf.open(fname) as fp_bh:
-                    return fp_bh.read().decode('utf-8')
+                    return self._canonical_csv_records(fp_bh.read().decode('utf-8'))
         except Exception as e:
-            raise Exception(f"Error processing F&O bhavcopy data for {dt.strftime('%d-%m-%Y')}: {str(e)}")
+            raise UpstreamResponseError(f"Error processing F&O bhavcopy data for {dt.strftime('%d-%m-%Y')}: {str(e)}")
 
+    def bhavcopy_fo_df(self, dt: DateLike):
+        return dataframe_from_records(self.bhavcopy_fo_raw(dt))
     
     def bhavcopy_fo_save(self, dt, dest, skip_if_present=True):
         """ Saves Derivatives Bhavcopy to a directory """
+        dt = coerce_date(dt, "dt")
         fmt = "fo%d%b%Ybhav.csv"
         fname = os.path.join(dest, dt.strftime(fmt))
         if os.path.isfile(fname) and skip_if_present:
             return fname
-        text = self.bhavcopy_fo_raw(dt)
-        with open(fname, 'w') as fp:
-            fp.write(text)
-        return fname
+        return write_records_csv(fname, self.bhavcopy_fo_raw(dt))
 
 class NSEIndicesArchives(NSEArchives):
     def __init__(self):
@@ -405,23 +442,25 @@ class NSEIndicesArchives(NSEArchives):
         # Headers are handled by client; if customization is needed, consider extending NSEHttpClient
 
     def bhavcopy_index_raw(self, dt):
-        """Downloads raw index bhavcopy text for a specific date"""
+        """Return canonical index bhavcopy records for a specific date."""
+        dt = coerce_date(dt, "dt")
         dd = dt.strftime('%d')
         mm = dt.strftime('%m').upper()
         yyyy = dt.year
         r = self.get("bhavcopy", yyyy=yyyy, mm=mm, dd=dd)
-        return r.text
+        return self._canonical_csv_records(r.text)
+
+    def bhavcopy_index_df(self, dt: DateLike):
+        return dataframe_from_records(self.bhavcopy_index_raw(dt))
    
     def bhavcopy_index_save(self, dt, dest, skip_if_present=True):
         """Downloads and saves index bhavcopy csv for a specific date"""
+        dt = coerce_date(dt, "dt")
         fmt = "ind_close_all_%d%m%Y.csv"
         fname = os.path.join(dest, dt.strftime(fmt))
         if os.path.isfile(fname) and skip_if_present:
             return fname
-        text = self.bhavcopy_index_raw(dt)
-        with open(fname, 'w') as fp:
-            fp.write(text)
-        return fname
+        return write_records_csv(fname, self.bhavcopy_index_raw(dt))
 
 class NSEIndices:
     """List of NSE indices"""
@@ -511,9 +550,12 @@ class NSEIndexConstituents(NSEArchives):
         raise ValueError(f"Invalid index type: {index_type}")
 
     def index_constituent_raw(self, index_type=str):
-        """Downloads raw index constituent text for a specific index"""
+        """Return canonical index constituent records for a specific index."""
         r = self.get(index_type)
-        return r.text
+        return self._canonical_csv_records(r.text)
+
+    def index_constituent_df(self, index_type: str):
+        return dataframe_from_records(self.index_constituent_raw(index_type))
 
     def index_constituent_save(self, index_type:str, dest, skip_if_present=True):
         """Downloads and saves index constituent csv for a specific index"""
@@ -521,11 +563,7 @@ class NSEIndexConstituents(NSEArchives):
         fpath = os.path.join(dest, fname)
         if os.path.isfile(fpath) and skip_if_present:
             return fpath
-        text = self.index_constituent_raw(index_type)
-        with open(fpath, 'w') as fp:
-            fp.write(text)
-
-        return fpath
+        return write_records_csv(fpath, self.index_constituent_raw(index_type))
 
     def index_constituent_save_all(self, dest, skip_if_present=True):
         """Downloads and saves index constituent csv for all known indexes"""
@@ -542,25 +580,31 @@ class NSEIndexConstituents(NSEArchives):
 
 a = NSEArchives()
 bhavcopy_raw = a.bhavcopy_raw
+bhavcopy_df = a.bhavcopy_df
 bhavcopy_save = a.bhavcopy_save
 full_bhavcopy_raw = a.full_bhavcopy_raw
+full_bhavcopy_df = a.full_bhavcopy_df
 full_bhavcopy_save = a.full_bhavcopy_save
 bulk_deals_raw = a.bulk_deals_raw
+bulk_deals_df = a.bulk_deals_df
 bulk_deals_save = a.bulk_deals_save
 bhavcopy_fo_raw = a.bhavcopy_fo_raw
+bhavcopy_fo_df = a.bhavcopy_fo_df
 bhavcopy_fo_save = a.bhavcopy_fo_save
 ia = NSEIndicesArchives()
 bhavcopy_index_raw = ia.bhavcopy_index_raw
+bhavcopy_index_df = ia.bhavcopy_index_df
 bhavcopy_index_save = ia.bhavcopy_index_save
 
 ic = NSEIndexConstituents()
 index_constituent_raw = ic.index_constituent_raw
+index_constituent_df = ic.index_constituent_df
 index_constituent_save = ic.index_constituent_save
 index_constituent_save_all = ic.index_constituent_save_all
 
 
 def expiry_dates(
-    dt: date,
+    dt: DateLike,
     instrument_type: str = "",
     symbol: str = "",
     contracts: int = 0,
@@ -607,7 +651,8 @@ def expiry_dates(
     def adjust_for_trading_day(candidate_date):
         """Adjust date to previous trading day if not a trading day"""
         while not is_trading_day(candidate_date):
-            candidate_date = date(candidate_date.year, candidate_date.month, candidate_date.day - 1)
+            from datetime import timedelta
+            candidate_date = candidate_date - timedelta(days=1)
         return candidate_date
     
     def get_monthly_expiry(year, month, expiry_weekday):
@@ -666,6 +711,9 @@ def expiry_dates(
         # Default to monthly for unknown cases
         return 'monthly'
     
+    dt = coerce_date(dt, "dt")
+    instrument_type = str(instrument_type).strip().upper()
+    symbol = str(symbol).strip().upper()
     expiry_weekday = get_expiry_weekday(dt)
     contract_cycle = determine_contract_cycle(instrument_type, symbol)
     expiries = []
