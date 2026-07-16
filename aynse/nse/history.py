@@ -16,6 +16,7 @@ import json
 import itertools
 import csv
 import logging
+from math import isfinite
 from datetime import date, datetime, timedelta
 from typing import Any, Callable, Dict, List, Optional, TYPE_CHECKING
 
@@ -26,6 +27,7 @@ from .. import util as ut
 from ..standard import (
     DateLike,
     InputValidationError,
+    UpstreamResponseError,
     coerce_date,
     dataframe_from_records,
     normalize_name,
@@ -37,18 +39,8 @@ from ..standard import (
     to_int,
     write_records_csv,
 )
-from .connection_pool import get_connection_pool
+from .connection_pool import NSEConnectionPool, get_connection_pool
 from .http_client import NSEHttpClient
-
-# Optional pandas import
-try:
-    import pandas as pd
-    import numpy as np
-    HAS_PANDAS = True
-except ImportError:
-    pd = None  # type: ignore[assignment]
-    np = None  # type: ignore[assignment]
-    HAS_PANDAS = False
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
@@ -181,11 +173,36 @@ class NSEHistory:
         # Optional instance override. If None, use global backend selection.
         self.stock_history_backend: Optional[str] = None
 
-        # Centralized HTTP client via connection pool
-        self.connection_pool = get_connection_pool()
-        self.client: NSEHttpClient = self.connection_pool.get_client(self.base_url)
+        # Pool and client construction stay lazy so importing aynse is free of
+        # networking resource allocation. Public attributes remain available
+        # through the compatibility properties below.
+        self._connection_pool: Optional[NSEConnectionPool] = None
+        self._client: Optional[NSEHttpClient] = None
 
         self.ssl_verify = True
+
+    @property
+    def connection_pool(self) -> NSEConnectionPool:
+        """Return the shared connection pool, creating it on first use."""
+        if self._connection_pool is None:
+            self._connection_pool = get_connection_pool()
+        return self._connection_pool
+
+    @connection_pool.setter
+    def connection_pool(self, value: NSEConnectionPool) -> None:
+        self._connection_pool = value
+        self._client = None
+
+    @property
+    def client(self) -> NSEHttpClient:
+        """Return this history instance's pooled client, acquired lazily."""
+        if self._client is None:
+            self._client = self.connection_pool.get_client(self.base_url)
+        return self._client
+
+    @client.setter
+    def client(self, value: NSEHttpClient) -> None:
+        self._client = value
 
     def _resolved_stock_backend(self) -> str:
         backend = (self.stock_history_backend or _stock_history_backend).strip().lower()
@@ -241,7 +258,12 @@ class NSEHistory:
         if path_name == "equity_quote_page":
             # Follow redirects to ensure cookies are set on this response
             try:
-                self.r = client._request_with_retry("GET", path, params=params, follow_redirects=True)
+                response = client._request_with_retry(
+                    "GET",
+                    path,
+                    params=params,
+                    follow_redirects=True,
+                )
             except httpx.ReadTimeout:
                 # Fallback: return a minimal response with a dummy cookie to keep tests stable
                 class _TimeoutResp:
@@ -252,7 +274,7 @@ class NSEHistory:
                     @property
                     def cookies(self):
                         return self._cookies
-                self.r = _TimeoutResp()
+                response = _TimeoutResp()
             # Ensure response exposes 'nseappid' in cookies if present in client jar
             try:
                 jar = getattr(client, "_client").cookies  # httpx.CookieJar
@@ -274,12 +296,16 @@ class NSEHistory:
                     @property
                     def cookies(self):
                         return self._cookies
-                self.r = _RespWrapper(self.r, nse_cookie or "test")
+                response = _RespWrapper(response, nse_cookie or "test")
             except Exception:
                 pass
         else:
-            self.r = client.get(path, params=params)
-        return self.r
+            response = client.get(path, params=params)
+        # Retain ``r`` as a best-effort compatibility/debug attribute, but
+        # always return the local response so concurrent chunk requests cannot
+        # accidentally consume another thread's response.
+        self.r = response
+        return response
     
     # Historical windows near "now" can change intra-day; keep cache fresh.
     @ut.cached(APP_NAME + '-stock', max_age_seconds=6 * 60 * 60)
@@ -291,8 +317,8 @@ class NSEHistory:
             'series': '["{}"]'.format(series),
         }
         try:
-            self.r = self._get("stock_history", params)
-            j = self.r.json()
+            response = self._get("stock_history", params)
+            j = response.json()
             return j['data']
         except Exception as exc:
             logger.warning(
@@ -444,7 +470,9 @@ class NSEHistory:
     def _derivatives(self, symbol, from_date, to_date, expiry_date, instrument_type, strike_price=None, option_type=None):
         valid_instrument_types = ["OPTIDX", "OPTSTK", "FUTIDX", "FUTSTK"]
         if instrument_type not in valid_instrument_types:
-            raise Exception("Invalid instrument_type, should be one of {}".format(", ".join(valid_instrument_types)))
+            raise InputValidationError(
+                "Invalid instrument_type, should be one of {}".format(", ".join(valid_instrument_types))
+            )
 
         params = {
             'symbol': symbol,
@@ -452,17 +480,21 @@ class NSEHistory:
             'to': to_date.strftime('%d-%m-%Y'),
             'expiryDate': expiry_date.strftime('%d-%b-%Y').upper(),
             'instrumentType': instrument_type
-            }
+        }
         if "OPT" in instrument_type:
-            if not(strike_price and option_type):
-                raise Exception("Missing argument for OPTIDX or OPTSTK, require both strike_price and option_type")
+            if strike_price is None or option_type is None:
+                raise InputValidationError(
+                    "Missing argument for OPTIDX or OPTSTK, require both strike_price and option_type"
+                )
                 
             params['strikePrice'] = "{:.2f}".format(strike_price)
             params['optionType'] = option_type
         
-        self.r = self._get("derivatives", params)
-        j = self.r.json()
-        rows = j['data']
+        response = self._get("derivatives", params)
+        payload = response.json()
+        rows = payload.get("data") if isinstance(payload, dict) else None
+        if not isinstance(rows, list):
+            raise UpstreamResponseError("NSE derivatives response did not contain a data list")
         for row in rows:
             row.setdefault("FH_INSTRUMENT", instrument_type)
         return rows
@@ -515,7 +547,16 @@ class NSEHistory:
 
         return []
 
-    def derivatives_raw(self, symbol, from_date, to_date, expiry_date, instrument_type, strike_price, option_type):
+    def derivatives_raw(
+        self,
+        symbol,
+        from_date,
+        to_date,
+        expiry_date,
+        instrument_type,
+        strike_price=None,
+        option_type=None,
+    ):
         """
         Fetch raw derivatives data for date range.
 
@@ -537,9 +578,25 @@ class NSEHistory:
 
         if "OPT" in instrument and (strike_price is None or option_type is None):
             raise ValueError("strike_price and option_type are required for options")
+        normalized_option_type = str(option_type).strip().upper() if option_type is not None else None
+        if normalized_option_type is not None and normalized_option_type not in {"CE", "PE"}:
+            raise ValueError("option_type must be either 'CE' or 'PE'")
+        if strike_price is not None:
+            try:
+                normalized_strike = float(strike_price)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    "strike_price must be a positive finite number"
+                ) from exc
+            if not isfinite(normalized_strike) or normalized_strike <= 0:
+                raise ValueError("strike_price must be a positive finite number")
+            strike_price = normalized_strike
 
         date_ranges = ut.break_dates(start, end)
-        params = [(normalize_symbol(symbol), x[0], x[1], expiry, instrument, strike_price, (str(option_type).upper() if option_type else None)) for x in reversed(date_ranges)]
+        params = [
+            (normalize_symbol(symbol), x[0], x[1], expiry, instrument, strike_price, normalized_option_type)
+            for x in reversed(date_ranges)
+        ]
 
         # Show progress if requested
         if self.show_progress:
@@ -659,8 +716,6 @@ class NSEIndexHistory(NSEHistory):
             "index_pe_history": "/Backpage.aspx/getpepbHistoricaldataDBtoString"
         }
         self.base_url = "https://niftyindices.com"
-        # Create separate client for NIFTY indices (different host)
-        self.client = self.connection_pool.get_client(self.base_url)
         self.ssl_verify = True
 
     def _post_json(self, path_name, params):
@@ -668,8 +723,7 @@ class NSEIndexHistory(NSEHistory):
         path = self.path_map[path_name]
         # Ensure client matches current base_url (tests may override base_url)
         client = self.connection_pool.get_client(self.base_url)
-        self.r = client._request_with_retry("POST", path, json=params)
-        return self.r
+        return client._request_with_retry("POST", path, json=params)
     
     @ut.cached(APP_NAME + '-index')
     def _index(self, symbol, from_date, to_date): 
@@ -677,17 +731,25 @@ class NSEIndexHistory(NSEHistory):
                 'startDate': from_date.strftime("%d-%b-%Y"),
                 'endDate': to_date.strftime("%d-%b-%Y")
         }
-        r = self._post_json("index_history", params=params)
-        return json.loads(self.r.json()['d'])
+        response = self._post_json("index_history", params=params)
+        payload = response.json()
+        if not isinstance(payload, dict) or not isinstance(payload.get("d"), str):
+            raise UpstreamResponseError("NIFTY index response did not contain the expected 'd' payload")
+        rows = json.loads(payload["d"])
+        if not isinstance(rows, list):
+            raise UpstreamResponseError("NIFTY index response payload was not a list")
+        return rows
     
     def index_raw(self, symbol, from_date, to_date):
         start = coerce_date(from_date, "from_date")
         end = coerce_date(to_date, "to_date")
+        if start > end:
+            raise ValueError("from_date must be before or equal to to_date")
         symbol_name = normalize_name(symbol)
         date_ranges = ut.break_dates(start, end)
         params = [(symbol_name, x[0], x[1]) for x in reversed(date_ranges)]
         chunks = ut.pool(self._index, params, max_workers=self.workers)
-        native = list(itertools.chain.from_iterable(chunks))
+        native = list(itertools.chain.from_iterable(chunk for chunk in chunks if isinstance(chunk, list)))
         records = []
         for row in native:
             records.append(
@@ -708,17 +770,25 @@ class NSEIndexHistory(NSEHistory):
                 'startDate': from_date.strftime("%d-%b-%Y"),
                 'endDate': to_date.strftime("%d-%b-%Y")
         }
-        r = self._post_json("index_pe_history", params=params)
-        return json.loads(self.r.json()['d'])
+        response = self._post_json("index_pe_history", params=params)
+        payload = response.json()
+        if not isinstance(payload, dict) or not isinstance(payload.get("d"), str):
+            raise UpstreamResponseError("NIFTY valuation response did not contain the expected 'd' payload")
+        rows = json.loads(payload["d"])
+        if not isinstance(rows, list):
+            raise UpstreamResponseError("NIFTY valuation response payload was not a list")
+        return rows
 
     def index_pe_raw(self, symbol, from_date, to_date):
         start = coerce_date(from_date, "from_date")
         end = coerce_date(to_date, "to_date")
+        if start > end:
+            raise ValueError("from_date must be before or equal to to_date")
         symbol_name = normalize_name(symbol)
         date_ranges = ut.break_dates(start, end)
         params = [(symbol_name, x[0], x[1]) for x in reversed(date_ranges)]
         chunks = ut.pool(self._index_pe, params, max_workers=self.workers)
-        native = list(itertools.chain.from_iterable(chunks))
+        native = list(itertools.chain.from_iterable(chunk for chunk in chunks if isinstance(chunk, list)))
         records = []
         for row in native:
             records.append(

@@ -7,7 +7,8 @@ multiple API calls, especially useful for historical data fetching.
 
 import asyncio
 import time
-from typing import Dict, List, Any, Callable, Optional, Union
+from math import isfinite
+from typing import Awaitable, Dict, List, Any, Callable, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 from dataclasses import dataclass
@@ -17,7 +18,7 @@ import logging
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
 
-from ..standard import coerce_date
+from ..standard import InputValidationError, coerce_date
 
 class BatchStrategy(Enum):
     """Different strategies for batching requests"""
@@ -65,10 +66,44 @@ class RequestBatcher:
             timeout: Request timeout in seconds
             strategy: Batching strategy to use
         """
+        if (
+            isinstance(max_batch_size, bool)
+            or not isinstance(max_batch_size, int)
+            or max_batch_size <= 0
+        ):
+            raise InputValidationError("max_batch_size must be a positive integer")
+        if (
+            isinstance(max_concurrent_batches, bool)
+            or not isinstance(max_concurrent_batches, int)
+            or max_concurrent_batches <= 0
+        ):
+            raise InputValidationError(
+                "max_concurrent_batches must be a positive integer"
+            )
+        if isinstance(timeout, bool):
+            raise InputValidationError("timeout must be a positive finite number")
+        try:
+            normalized_timeout = float(timeout)
+        except (TypeError, ValueError) as exc:
+            raise InputValidationError(
+                "timeout must be a positive finite number"
+            ) from exc
+        if not isfinite(normalized_timeout) or normalized_timeout <= 0:
+            raise InputValidationError("timeout must be a positive finite number")
+        try:
+            normalized_strategy = BatchStrategy(strategy)
+        except (TypeError, ValueError) as exc:
+            choices = ", ".join(item.value for item in BatchStrategy)
+            raise InputValidationError(
+                f"strategy must be one of: {choices}"
+            ) from exc
+
         self.max_batch_size = max_batch_size
         self.max_concurrent_batches = max_concurrent_batches
-        self.timeout = timeout
-        self.strategy = strategy
+        # Async requests are cancellable and enforce this timeout. Synchronous
+        # callables must continue to apply their own transport-level timeout.
+        self.timeout = normalized_timeout
+        self.strategy = normalized_strategy
 
         self._stats = BatchStats(0, 0, 0, 0.0, 0.0, 0.0)
         self._lock = threading.Lock()
@@ -93,7 +128,7 @@ class RequestBatcher:
         if not requests:
             return []
 
-        start_time = time.time()
+        start_time = time.monotonic()
 
         # Split requests into batches
         batches = self._create_batches(requests)
@@ -122,7 +157,7 @@ class RequestBatcher:
             all_results = self._process_batch_adaptive(batches, request_func, **kwargs)
 
         # Update statistics
-        end_time = time.time()
+        end_time = time.monotonic()
         duration = end_time - start_time
 
         logger.info("batch_complete", extra={
@@ -137,16 +172,22 @@ class RequestBatcher:
             self._stats.successful_requests += sum(1 for r in all_results if r.success)
             self._stats.failed_requests += sum(1 for r in all_results if not r.success)
             self._stats.total_duration += duration
-            if len(requests) > 0:
-                self._stats.avg_request_time = duration / len(requests)
-                self._stats.requests_per_second = len(requests) / duration if duration > 0 else 0
+            if self._stats.total_requests > 0:
+                self._stats.avg_request_time = (
+                    self._stats.total_duration / self._stats.total_requests
+                )
+                self._stats.requests_per_second = (
+                    self._stats.total_requests / self._stats.total_duration
+                    if self._stats.total_duration > 0
+                    else 0
+                )
 
         return all_results
 
     async def abatch_requests(
         self,
         requests: List[Dict[str, Any]],
-        request_coro_func: Callable[..., "asyncio.Future[Any]"],
+        request_coro_func: Callable[..., Awaitable[Any]],
         max_concurrency: Optional[int] = None,
         **kwargs: Any
     ) -> List[BatchResult]:
@@ -162,29 +203,59 @@ class RequestBatcher:
         if not requests:
             return []
 
-        limit = max_concurrency or (self.max_concurrent_batches * self.max_batch_size)
+        if max_concurrency is not None and (
+            isinstance(max_concurrency, bool)
+            or not isinstance(max_concurrency, int)
+            or max_concurrency <= 0
+        ):
+            raise InputValidationError("max_concurrency must be a positive integer")
+        limit = max_concurrency or (
+            self.max_concurrent_batches * self.max_batch_size
+        )
         semaphore = asyncio.Semaphore(limit)
         results: List[BatchResult] = [None] * len(requests)  # type: ignore[assignment]
+        batch_started = time.monotonic()
 
         async def run_one(idx: int, params: Dict[str, Any]) -> None:
             async with semaphore:
-                start = time.time()
+                start = time.monotonic()
                 try:
                     merged = {**params, **kwargs}
-                    data = await request_coro_func(**merged)
-                    duration = time.time() - start
+                    data = await asyncio.wait_for(
+                        request_coro_func(**merged),
+                        timeout=self.timeout,
+                    )
+                    duration = time.monotonic() - start
                     results[idx] = BatchResult(True, data, None, duration, 0)
+                except asyncio.TimeoutError:
+                    duration = time.monotonic() - start
+                    results[idx] = BatchResult(
+                        False,
+                        None,
+                        f"request timed out after {self.timeout:g}s",
+                        duration,
+                        0,
+                    )
                 except Exception as e:
-                    duration = time.time() - start
+                    duration = time.monotonic() - start
                     results[idx] = BatchResult(False, None, str(e), duration, 0)
 
         await asyncio.gather(*(run_one(i, p) for i, p in enumerate(requests)))
+        batch_duration = time.monotonic() - batch_started
         # Update statistics
         with self._lock:
             self._stats.total_requests += len(requests)
             self._stats.successful_requests += sum(1 for r in results if r and r.success)
             self._stats.failed_requests += sum(1 for r in results if r and not r.success)
-            # avg/throughput not tracked for async in this simple implementation
+            self._stats.total_duration += batch_duration
+            self._stats.avg_request_time = (
+                self._stats.total_duration / self._stats.total_requests
+            )
+            self._stats.requests_per_second = (
+                self._stats.total_requests / self._stats.total_duration
+                if self._stats.total_duration > 0
+                else 0
+            )
         # type: ignore[return-value]
         return results
 
@@ -204,7 +275,7 @@ class RequestBatcher:
         results = []
 
         for request_params in batch:
-            start_time = time.time()
+            start_time = time.monotonic()
 
             try:
                 # Merge request parameters with additional kwargs
@@ -213,11 +284,11 @@ class RequestBatcher:
                 # Call the request function
                 data = request_func(**merged_params)
 
-                duration = time.time() - start_time
+                duration = time.monotonic() - start_time
                 results.append(BatchResult(success=True, data=data, duration=duration))
 
             except Exception as e:
-                duration = time.time() - start_time
+                duration = time.monotonic() - start_time
                 results.append(BatchResult(
                     success=False,
                     data=None,
@@ -285,12 +356,12 @@ class RequestBatcher:
         batch_times = []
 
         for i, batch in enumerate(batches):
-            start_time = time.time()
+            start_time = time.monotonic()
 
             batch_results = self._process_batch_sequential(batch, request_func, **kwargs)
             all_results.extend(batch_results)
 
-            batch_duration = time.time() - start_time
+            batch_duration = time.monotonic() - start_time
             batch_times.append(batch_duration)
 
             # Adaptive delay based on recent performance
@@ -304,7 +375,7 @@ class RequestBatcher:
     def get_stats(self) -> BatchStats:
         """Get current batch processing statistics"""
         with self._lock:
-            return self._stats
+            return BatchStats(**vars(self._stats))
 
     def reset_stats(self):
         """Reset batch processing statistics"""
@@ -317,7 +388,8 @@ def batch_stock_requests(symbols: List[str],
                         from_date,
                         to_date,
                         series: str = "EQ",
-                        batcher: Optional[RequestBatcher] = None) -> List[BatchResult]:
+                        batcher: Optional[RequestBatcher] = None,
+                        output: str = "csv") -> List[BatchResult]:
     """
     Batch multiple stock data requests.
 
@@ -327,6 +399,8 @@ def batch_stock_requests(symbols: List[str],
         to_date: End date in YYYY-MM-DD format
         series: Stock series (EQ, BE, etc.)
         batcher: Optional RequestBatcher instance
+        output: "csv" for saved file paths or "records" for canonical
+            in-memory records
 
     Returns:
         List of BatchResult objects
@@ -343,14 +417,18 @@ def batch_stock_requests(symbols: List[str],
     ]
 
     # Import here to avoid circular imports
-    from .history import stock_csv
+    from .history import stock_csv, stock_raw
 
+    mode = _normalize_batch_output(output)
+    if mode == "records":
+        return batcher.batch_requests(requests, stock_raw)
     return batcher.batch_requests(requests, stock_csv, show_progress=False)
 
 def batch_index_requests(symbols: List[str],
                         from_date,
                         to_date,
-                        batcher: Optional[RequestBatcher] = None) -> List[BatchResult]:
+                        batcher: Optional[RequestBatcher] = None,
+                        output: str = "csv") -> List[BatchResult]:
     """
     Batch multiple index data requests.
 
@@ -359,6 +437,8 @@ def batch_index_requests(symbols: List[str],
         from_date: Start date in YYYY-MM-DD format
         to_date: End date in YYYY-MM-DD format
         batcher: Optional RequestBatcher instance
+        output: "csv" for saved file paths or "records" for canonical
+            in-memory records
 
     Returns:
         List of BatchResult objects
@@ -375,18 +455,24 @@ def batch_index_requests(symbols: List[str],
     ]
 
     # Import here to avoid circular imports
-    from .history import index_csv
+    from .history import index_csv, index_raw
 
+    mode = _normalize_batch_output(output)
+    if mode == "records":
+        return batcher.batch_requests(requests, index_raw)
     return batcher.batch_requests(requests, index_csv, show_progress=False)
 
 def batch_derivatives_requests(requests_data: List[Dict[str, Any]],
-                              batcher: Optional[RequestBatcher] = None) -> List[BatchResult]:
+                              batcher: Optional[RequestBatcher] = None,
+                              output: str = "csv") -> List[BatchResult]:
     """
     Batch multiple derivatives data requests.
 
     Args:
         requests_data: List of request dictionaries with derivatives parameters
         batcher: Optional RequestBatcher instance
+        output: "csv" for saved file paths or "records" for canonical
+            in-memory records
 
     Returns:
         List of BatchResult objects
@@ -406,6 +492,16 @@ def batch_derivatives_requests(requests_data: List[Dict[str, Any]],
         normalized_requests.append(item)
 
     # Import here to avoid circular imports
-    from .history import derivatives_csv
+    from .history import derivatives_csv, derivatives_raw
 
+    mode = _normalize_batch_output(output)
+    if mode == "records":
+        return batcher.batch_requests(normalized_requests, derivatives_raw)
     return batcher.batch_requests(normalized_requests, derivatives_csv, show_progress=False)
+
+
+def _normalize_batch_output(output: str) -> str:
+    mode = str(output).strip().lower()
+    if mode not in {"csv", "records"}:
+        raise InputValidationError("output must be either 'csv' or 'records'")
+    return mode

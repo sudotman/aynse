@@ -5,13 +5,15 @@ This module provides tools for processing NSE data in chunks to minimize
 memory usage and improve performance with large datasets.
 """
 
-import io
 import csv
+import io
 import json
-from typing import Dict, List, Any, Generator, Callable, Optional, Union
+from typing import Dict, List, Any, Generator, Callable, Iterable, Iterator, Optional
 from dataclasses import dataclass
-import gzip
 import zipfile
+
+_MISSING = object()
+
 
 @dataclass
 class StreamConfig:
@@ -20,6 +22,28 @@ class StreamConfig:
     max_memory_mb: int = 100  # Maximum memory usage in MB
     buffer_size: int = 8192  # Buffer size for file operations
     encoding: str = 'utf-8'
+
+    def __post_init__(self) -> None:
+        if (
+            isinstance(self.chunk_size, bool)
+            or not isinstance(self.chunk_size, int)
+            or self.chunk_size <= 0
+        ):
+            raise ValueError("chunk_size must be a positive integer")
+        if (
+            isinstance(self.max_memory_mb, bool)
+            or not isinstance(self.max_memory_mb, int)
+            or self.max_memory_mb <= 0
+        ):
+            raise ValueError("max_memory_mb must be a positive integer")
+        if (
+            isinstance(self.buffer_size, bool)
+            or not isinstance(self.buffer_size, int)
+            or self.buffer_size <= 0
+        ):
+            raise ValueError("buffer_size must be a positive integer")
+        if not str(self.encoding).strip():
+            raise ValueError("encoding cannot be empty")
 
 class StreamingProcessor:
     """
@@ -33,10 +57,147 @@ class StreamingProcessor:
         """Initialize streaming processor with configuration"""
         self.config = config or StreamConfig()
 
+    def iter_csv_file(
+        self,
+        file_path: str,
+        skip_header: bool = True,
+    ) -> Iterator[Dict[str, Any]]:
+        """Yield CSV rows without materializing the complete file."""
+        with open(
+            file_path,
+            "r",
+            encoding=self.config.encoding,
+            buffering=self.config.buffer_size,
+            newline="",
+        ) as file:
+            yield from self._iter_csv_text(file, skip_header=skip_header)
+
+    def iter_csv_string(
+        self,
+        csv_data: str,
+        skip_header: bool = True,
+    ) -> Iterator[Dict[str, Any]]:
+        """Yield rows from an in-memory CSV string."""
+        with io.StringIO(csv_data) as buffer:
+            yield from self._iter_csv_text(buffer, skip_header=skip_header)
+
+    def _iter_csv_text(
+        self,
+        text_stream: Iterable[str],
+        *,
+        skip_header: bool,
+    ) -> Iterator[Dict[str, Any]]:
+        if skip_header:
+            for row in csv.DictReader(text_stream):
+                yield dict(row)
+            return
+
+        for values in csv.reader(text_stream):
+            yield {f"column_{index}": value for index, value in enumerate(values)}
+
+    def iter_json_file(self, file_path: str) -> Iterator[Any]:
+        """
+        Yield JSON objects from either NDJSON or a top-level JSON array.
+
+        NDJSON is processed line by line. Standard-library JSON array parsing
+        necessarily loads the array before yielding; use NDJSON for very large
+        streams.
+        """
+        with open(file_path, "r", encoding=self.config.encoding) as file:
+            first_non_empty = ""
+            while not first_non_empty:
+                line = file.readline()
+                if not line:
+                    return
+                first_non_empty = line.strip()
+            file.seek(0)
+
+            if first_non_empty.startswith("["):
+                data = json.load(file)
+                if not isinstance(data, list):
+                    raise ValueError("Top-level JSON payload must be an array")
+                yield from data
+                return
+
+            for line in file:
+                text = line.strip()
+                if text:
+                    yield json.loads(text)
+
+    def iter_zip_file(
+        self,
+        zip_path: str,
+        csv_filename: Optional[str] = None,
+    ) -> Iterator[Dict[str, Any]]:
+        """Yield rows from a selected CSV member inside a ZIP archive."""
+        with zipfile.ZipFile(zip_path, "r") as zip_file:
+            csv_files = [name for name in zip_file.namelist() if name.lower().endswith(".csv")]
+            if not csv_files:
+                raise ValueError("No CSV files found in ZIP archive")
+            target_file = csv_filename or csv_files[0]
+            if target_file not in csv_files:
+                raise ValueError(f"CSV file not found in ZIP archive: {target_file}")
+            with zip_file.open(target_file) as csv_file:
+                wrapper = io.TextIOWrapper(csv_file, encoding=self.config.encoding, newline="")
+                yield from (dict(row) for row in csv.DictReader(wrapper))
+
+    def _chunks(self, records: Iterable[Any]) -> Iterator[List[Any]]:
+        chunk: List[Any] = []
+        for record in records:
+            chunk.append(record)
+            if len(chunk) >= self.config.chunk_size:
+                yield chunk
+                chunk = []
+        if chunk:
+            yield chunk
+
+    def _process_chunks(
+        self,
+        chunks: Iterable[List[Any]],
+        processor_func: Callable[[List[Any]], Any],
+        *,
+        reducer: Optional[Callable[[Any, Any], Any]] = None,
+        initial: Any = _MISSING,
+        stop_when: Optional[Callable[[Any], bool]] = None,
+    ) -> Any:
+        results: List[Any] = []
+        aggregate = initial
+        has_aggregate = initial is not _MISSING
+
+        for chunk in chunks:
+            result = processor_func(chunk)
+            if reducer is None:
+                results.append(result)
+                # Combining all prior chunks on every iteration makes the
+                # ordinary path quadratic. Only materialize an intermediate
+                # aggregate when early-stop logic actually needs one.
+                current = (
+                    self._combine_results(results)
+                    if stop_when is not None
+                    else None
+                )
+            else:
+                if has_aggregate:
+                    aggregate = reducer(aggregate, result)
+                else:
+                    aggregate = result
+                    has_aggregate = True
+                current = aggregate
+            if stop_when is not None and stop_when(current):
+                break
+
+        if reducer is not None:
+            return aggregate if has_aggregate else None
+        return self._combine_results(results)
+
     def process_csv_file(self,
                         file_path: str,
                         processor_func: Callable[[List[Dict[str, Any]]], Any],
-                        skip_header: bool = True) -> Any:
+                        skip_header: bool = True,
+                        *,
+                        reducer: Optional[Callable[[Any, Any], Any]] = None,
+                        initial: Any = _MISSING,
+                        stop_when: Optional[Callable[[Any], bool]] = None) -> Any:
         """
         Process a CSV file in streaming chunks.
 
@@ -48,34 +209,22 @@ class StreamingProcessor:
         Returns:
             Result of processing all chunks
         """
-        results = []
-
-        with open(file_path, 'r', encoding=self.config.encoding, buffering=self.config.buffer_size, newline='') as file:
-            if skip_header:
-                csv_reader = csv.DictReader(file)
-            else:
-                csv_reader = csv.DictReader(file, fieldnames=None)
-
-            chunk = []
-            for row in csv_reader:
-                chunk.append(dict(row))
-                if len(chunk) >= self.config.chunk_size:
-                    result = processor_func(chunk)
-                    results.append(result)
-                    chunk = []
-
-            # Process remaining data
-            if chunk:
-                result = processor_func(chunk)
-                results.append(result)
-
-        # Combine results from all chunks
-        return self._combine_results(results)
+        return self._process_chunks(
+            self._chunks(self.iter_csv_file(file_path, skip_header=skip_header)),
+            processor_func,
+            reducer=reducer,
+            initial=initial,
+            stop_when=stop_when,
+        )
 
     def process_csv_string(self,
                           csv_data: str,
                           processor_func: Callable[[List[Dict[str, Any]]], Any],
-                          skip_header: bool = True) -> Any:
+                          skip_header: bool = True,
+                          *,
+                          reducer: Optional[Callable[[Any, Any], Any]] = None,
+                          initial: Any = _MISSING,
+                          stop_when: Optional[Callable[[Any], bool]] = None) -> Any:
         """
         Process CSV data from string in streaming chunks.
 
@@ -87,31 +236,21 @@ class StreamingProcessor:
         Returns:
             Result of processing all chunks
         """
-        results = []
-
-        # Create string buffer for streaming
-        csv_buffer = io.StringIO(csv_data)
-        csv_reader = csv.DictReader(csv_buffer)
-
-        chunk = []
-        for row_num, row in enumerate(csv_reader):
-            chunk.append(dict(row))
-
-            if len(chunk) >= self.config.chunk_size:
-                result = processor_func(chunk)
-                results.append(result)
-                chunk = []
-
-        # Process remaining data
-        if chunk:
-            result = processor_func(chunk)
-            results.append(result)
-
-        return self._combine_results(results)
+        return self._process_chunks(
+            self._chunks(self.iter_csv_string(csv_data, skip_header=skip_header)),
+            processor_func,
+            reducer=reducer,
+            initial=initial,
+            stop_when=stop_when,
+        )
 
     def process_json_file(self,
                          file_path: str,
-                         processor_func: Callable[[List[Dict[str, Any]]], Any]) -> Any:
+                         processor_func: Callable[[List[Dict[str, Any]]], Any],
+                         *,
+                         reducer: Optional[Callable[[Any, Any], Any]] = None,
+                         initial: Any = _MISSING,
+                         stop_when: Optional[Callable[[Any], bool]] = None) -> Any:
         """
         Process a JSON file in streaming chunks.
 
@@ -122,49 +261,22 @@ class StreamingProcessor:
         Returns:
             Result of processing all chunks
         """
-        results = []
-
-        with open(file_path, 'r', encoding=self.config.encoding) as file:
-            first_non_empty = ""
-            while not first_non_empty:
-                position = file.tell()
-                line = file.readline()
-                if not line:
-                    break
-                first_non_empty = line.strip()
-            file.seek(0)
-
-            chunk = []
-            if first_non_empty.startswith('['):
-                data = json.load(file)
-                for obj in data:
-                    chunk.append(obj)
-                    if len(chunk) >= self.config.chunk_size:
-                        result = processor_func(chunk)
-                        results.append(result)
-                        chunk = []
-            else:
-                for line in file:
-                    text = line.strip()
-                    if not text:
-                        continue
-                    obj = json.loads(text)
-                    chunk.append(obj)
-                    if len(chunk) >= self.config.chunk_size:
-                        result = processor_func(chunk)
-                        results.append(result)
-                        chunk = []
-
-            if chunk:
-                result = processor_func(chunk)
-                results.append(result)
-
-        return self._combine_results(results)
+        return self._process_chunks(
+            self._chunks(self.iter_json_file(file_path)),
+            processor_func,
+            reducer=reducer,
+            initial=initial,
+            stop_when=stop_when,
+        )
 
     def process_zip_file(self,
                         zip_path: str,
                         processor_func: Callable[[List[Dict[str, Any]]], Any],
-                        csv_filename: Optional[str] = None) -> Any:
+                        csv_filename: Optional[str] = None,
+                        *,
+                        reducer: Optional[Callable[[Any, Any], Any]] = None,
+                        initial: Any = _MISSING,
+                        stop_when: Optional[Callable[[Any], bool]] = None) -> Any:
         """
         Process CSV data from within a ZIP file in streaming chunks.
 
@@ -176,34 +288,13 @@ class StreamingProcessor:
         Returns:
             Result of processing all chunks
         """
-        results = []
-
-        with zipfile.ZipFile(zip_path, 'r') as zip_file:
-            # Find CSV file(s)
-            csv_files = [f for f in zip_file.namelist() if f.lower().endswith('.csv')]
-
-            if not csv_files:
-                raise ValueError("No CSV files found in ZIP archive")
-
-            # Use specified file or first CSV file
-            target_file = csv_filename or csv_files[0]
-
-            with zip_file.open(target_file) as csv_file:
-                wrapper = io.TextIOWrapper(csv_file, encoding=self.config.encoding, newline='')
-                reader = csv.DictReader(wrapper)
-                chunk = []
-                for row in reader:
-                    chunk.append(dict(row))
-                    if len(chunk) >= self.config.chunk_size:
-                        result = processor_func(chunk)
-                        results.append(result)
-                        chunk = []
-
-                if chunk:
-                    result = processor_func(chunk)
-                    results.append(result)
-
-        return self._combine_results(results)
+        return self._process_chunks(
+            self._chunks(self.iter_zip_file(zip_path, csv_filename=csv_filename)),
+            processor_func,
+            reducer=reducer,
+            initial=initial,
+            stop_when=stop_when,
+        )
 
     def _combine_results(self, results: List[Any]) -> Any:
         """Combine results from multiple chunks"""
@@ -278,24 +369,10 @@ def create_data_generator(file_path: str,
     processor = StreamingProcessor(StreamConfig(chunk_size=chunk_size))
 
     if data_format.lower() == 'csv':
-        # Process file in chunks and yield each record
-        def process_and_yield(chunk):
-            for record in chunk:
-                yield record
-
-        # Process file and yield each record
-        for chunk in processor.process_csv_file(file_path, lambda x: x):
-            for record in chunk:
-                yield record
+        yield from processor.iter_csv_file(file_path)
 
     elif data_format.lower() == 'json':
-        def process_and_yield(chunk):
-            for record in chunk:
-                yield record
-
-        for chunk in processor.process_json_file(file_path, lambda x: x):
-            for record in chunk:
-                yield record
+        yield from processor.iter_json_file(file_path)
 
     else:
         raise ValueError(f"Unsupported data format: {data_format}")

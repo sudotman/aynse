@@ -185,6 +185,7 @@ This page lists the standardized public API for `aynse`.
       members:
         - stock_quote
         - stock_quote_fno
+        - option_chain_contract_info
         - trade_info
         - market_status
         - chart_data
@@ -272,6 +273,26 @@ This page lists the standardized public API for `aynse`.
       show_source: false
 
 ::: aynse.analytics.add_rolling_volatility
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: aynse.analytics.add_moving_average
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: aynse.analytics.add_rsi
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: aynse.analytics.add_atr
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: aynse.analytics.add_bollinger_bands
     options:
       show_root_heading: true
       show_source: false

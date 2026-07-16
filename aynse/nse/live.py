@@ -5,12 +5,13 @@ Canonical live-data client for NSE endpoints.
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import timedelta
+from datetime import date
 from typing import Any, Dict, Iterable, Optional
 import time
 
 from ..standard import (
     DateLike,
+    InputValidationError,
     clean_text,
     coerce_date,
     normalize_name,
@@ -80,7 +81,6 @@ class NSELive:
     _routes = {
         "stock_meta": "/equity-meta-info",
         "stock_quote": "/quote-equity",
-        "stock_derivative_quote": "/quote-derivative",
         "market_status": "/marketStatus",
         "chart_data": "/chart-databyindex",
         "market_turnover": "/market-turnover",
@@ -153,13 +153,17 @@ class NSELive:
 
     @live_cache
     def stock_quote_fno(self, symbol):
-        data = {"symbol": normalize_symbol(symbol)}
-        payload = self.get("stock_derivative_quote", data)
-        quote = self._normalize_quote(payload, quote_type="derivative")
+        """Return the equity quote plus the symbol's available F&O contracts."""
+        symbol_name = normalize_symbol(symbol)
+        quote = dict(self.stock_quote(symbol_name))
+        contract_info = self.option_chain_contract_info(symbol_name)
+        # Preserve the established response shape even though NSE removed the
+        # old /quote-derivative endpoint.
+        quote["quote_type"] = "derivative"
         quote["derivative_details"] = {
-            "stocks": payload.get("stocks") or [],
-            "strike_prices": payload.get("strikePrices") or [],
-            "expiry_dates": [parse_date_maybe(item) for item in payload.get("expiryDates") or []],
+            "stocks": [],
+            "strike_prices": contract_info["strike_prices"],
+            "expiry_dates": contract_info["expiry_dates"],
         }
         return quote
 
@@ -283,14 +287,129 @@ class NSELive:
         except Exception:
             pass
 
-    def _get_first_expiry(self, symbol: str) -> str:
-        info = self.client.get_json("/api/option-chain-contract-info", params={"symbol": symbol})
-        expiries = info.get("expiryDates") or info.get("records", {}).get("expiryDates") or []
-        if not expiries:
-            raise ValueError(f"No expiries returned for {symbol}")
-        return expiries[0]
+    @staticmethod
+    def _contract_info_values(payload: Dict[str, Any], *keys: str) -> list[Any]:
+        """Extract a contract-info list across NSE's known response wrappers."""
+        sources = [payload]
+        for wrapper in ("records", "data"):
+            wrapped = payload.get(wrapper)
+            if isinstance(wrapped, dict):
+                sources.append(wrapped)
 
-    def _normalize_option_chain(self, payload: Dict[str, Any], symbol: str, market_type: str) -> Dict[str, Any]:
+        for source in sources:
+            for key in keys:
+                value = source.get(key)
+                if value in (None, ""):
+                    continue
+                if isinstance(value, (list, tuple)):
+                    if value:
+                        return list(value)
+                    continue
+                return [value]
+        return []
+
+    @live_cache
+    def option_chain_contract_info(self, symbol: str) -> Dict[str, Any]:
+        """Return normalized expiries and strikes available for a symbol."""
+        symbol_name = normalize_symbol(symbol)
+        payload = self.client.get_json(
+            "/api/option-chain-contract-info",
+            params={"symbol": symbol_name},
+        )
+        if not isinstance(payload, dict):
+            payload = {}
+
+        expiry_values = self._contract_info_values(
+            payload,
+            "expiryDates",
+            "expiryDate",
+            "expiry_dates",
+        )
+        strike_values = self._contract_info_values(
+            payload,
+            "strikePrice",
+            "strikePrices",
+            "strike_prices",
+        )
+
+        expiry_dates = []
+        for value in expiry_values:
+            if isinstance(value, dict):
+                value = value.get("expiryDate") or value.get("expiryDates")
+            values = value if isinstance(value, (list, tuple)) else [value]
+            for item in values:
+                parsed = parse_date_maybe(item)
+                if parsed is not None and parsed not in expiry_dates:
+                    expiry_dates.append(parsed)
+
+        strike_prices = []
+        for value in strike_values:
+            if isinstance(value, dict):
+                value = value.get("strikePrice") or value.get("strikePrices")
+            values = value if isinstance(value, (list, tuple)) else [value]
+            for item in values:
+                parsed = to_float(item)
+                if parsed is not None and parsed not in strike_prices:
+                    strike_prices.append(parsed)
+
+        return {
+            "symbol": symbol_name,
+            "expiry_dates": expiry_dates,
+            "strike_prices": strike_prices,
+        }
+
+    def _select_option_chain_expiry(
+        self,
+        symbol: str,
+        expiry: Optional[DateLike],
+    ) -> date:
+        contract_info = self.option_chain_contract_info(symbol)
+        available = contract_info["expiry_dates"]
+        if not available:
+            raise InputValidationError(
+                f"No option-chain expiries are available for {symbol}"
+            )
+
+        selected = available[0] if expiry is None else coerce_date(expiry, "expiry")
+        if selected not in available:
+            choices = ", ".join(item.isoformat() for item in available)
+            raise InputValidationError(
+                f"Expiry {selected.isoformat()} is not available for {symbol}; "
+                f"available expiries: {choices}"
+            )
+        return selected
+
+    @staticmethod
+    def _format_option_chain_expiry(expiry: date) -> str:
+        """Format a date for NSE's option-chain-v3 query parameter."""
+        months = (
+            "Jan",
+            "Feb",
+            "Mar",
+            "Apr",
+            "May",
+            "Jun",
+            "Jul",
+            "Aug",
+            "Sep",
+            "Oct",
+            "Nov",
+            "Dec",
+        )
+        return f"{expiry.day:02d}-{months[expiry.month - 1]}-{expiry.year:04d}"
+
+    def _get_first_expiry(self, symbol: str) -> str:
+        """Backward-compatible internal helper for the nearest expiry."""
+        selected = self._select_option_chain_expiry(normalize_symbol(symbol), None)
+        return self._format_option_chain_expiry(selected)
+
+    def _normalize_option_chain(
+        self,
+        payload: Dict[str, Any],
+        symbol: str,
+        market_type: str,
+        selected_expiry: Optional[date] = None,
+    ) -> Dict[str, Any]:
         records = payload.get("records", {}) if isinstance(payload, dict) else {}
         rows = []
         for row in records.get("data", []) if isinstance(records, dict) else []:
@@ -308,6 +427,7 @@ class NSELive:
             "market_type": market_type,
             "timestamp": clean_text(records.get("timestamp")),
             "underlying_value": to_float(records.get("underlyingValue")),
+            "selected_expiry": selected_expiry,
             "expiry_dates": [parse_date_maybe(item) for item in records.get("expiryDates", [])],
             "strike_prices": [to_float(item) for item in records.get("strikePrices", [])],
             "records": rows,
@@ -316,22 +436,50 @@ class NSELive:
         return chain
 
     @live_cache
-    def index_option_chain(self, symbol="NIFTY"):
+    def index_option_chain(
+        self,
+        symbol="NIFTY",
+        expiry: Optional[DateLike] = None,
+    ):
+        """Return an index option chain, optionally for a validated expiry."""
         symbol_name = normalize_symbol(symbol)
         self._prime_option_chain(indices=True)
-        expiry = self._get_first_expiry(symbol_name)
-        params = {"type": "Indices", "symbol": symbol_name, "expiry": expiry}
+        selected_expiry = self._select_option_chain_expiry(symbol_name, expiry)
+        params = {
+            "type": "Indices",
+            "symbol": symbol_name,
+            "expiry": self._format_option_chain_expiry(selected_expiry),
+        }
         payload = self.client.get_json("/api/option-chain-v3", params=params)
-        return self._normalize_option_chain(payload, symbol_name, "index")
+        return self._normalize_option_chain(
+            payload,
+            symbol_name,
+            "index",
+            selected_expiry,
+        )
 
     @live_cache
-    def equities_option_chain(self, symbol):
+    def equities_option_chain(
+        self,
+        symbol,
+        expiry: Optional[DateLike] = None,
+    ):
+        """Return an equity option chain, optionally for a validated expiry."""
         symbol_name = normalize_symbol(symbol)
         self._prime_option_chain(indices=False)
-        expiry = self._get_first_expiry(symbol_name)
-        params = {"type": "Stocks", "symbol": symbol_name, "expiry": expiry}
+        selected_expiry = self._select_option_chain_expiry(symbol_name, expiry)
+        params = {
+            "type": "Stocks",
+            "symbol": symbol_name,
+            "expiry": self._format_option_chain_expiry(selected_expiry),
+        }
         payload = self.client.get_json("/api/option-chain-v3", params=params)
-        return self._normalize_option_chain(payload, symbol_name, "equity")
+        return self._normalize_option_chain(
+            payload,
+            symbol_name,
+            "equity",
+            selected_expiry,
+        )
 
     @live_cache
     def currency_option_chain(self, symbol="USDINR"):

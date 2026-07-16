@@ -42,6 +42,16 @@ print(f"Available Strike Prices: {details['strike_prices'][:5]}")
 print(f"Available Expiries: {details['expiry_dates'][:3]}")
 ```
 
+`stock_quote_fno` combines the canonical equity quote with the currently
+available derivative contracts. Contract availability can also be fetched
+directly:
+
+```python
+contracts = live.option_chain_contract_info("RELIANCE")
+print(contracts["expiry_dates"])
+print(contracts["strike_prices"][:5])
+```
+
 ### Trade Info
 
 Get detailed trading information:
@@ -67,9 +77,17 @@ for market in status['markets']:
 ### Index Option Chain (v3)
 
 ```python
-# NIFTY option chain (uses option-chain-v3; auto-selects first expiry)
+# Omit expiry to auto-select the first available contract.
 chain = live.index_option_chain("NIFTY")
 
+# Or request a specific advertised expiry.
+contracts = live.option_chain_contract_info("NIFTY")
+selected_chain = live.index_option_chain(
+    "NIFTY",
+    expiry=contracts["expiry_dates"][0],
+)
+
+print(f"Selected Expiry: {chain['selected_expiry']}")
 print(f"Expiry Dates: {chain['expiry_dates'][:3]}")
 print(f"Strike Prices: {chain['strike_prices'][:5]}")
 print(chain["summary"])
@@ -83,8 +101,12 @@ for strike in chain["records"][:5]:
 ### Equity Option Chain (v3)
 
 ```python
-# RELIANCE option chain (uses option-chain-v3; auto-selects first expiry)
-chain = live.equities_option_chain("RELIANCE")
+# Uses option-chain-v3 and validates explicit expiries against contract info.
+contracts = live.option_chain_contract_info("RELIANCE")
+chain = live.equities_option_chain(
+    "RELIANCE",
+    expiry=contracts["expiry_dates"][0],
+)
 
 for strike_data in chain["records"][:5]:
     print(f"Strike: {strike_data['strike_price']}")

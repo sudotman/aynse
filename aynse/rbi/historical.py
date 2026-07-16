@@ -9,7 +9,6 @@ from datetime import date
 from io import StringIO
 from typing import Any, Dict, List
 
-import pandas as pd
 import requests
 
 from ..standard import UpstreamResponseError, clean_text, snake_case, to_float
@@ -38,6 +37,7 @@ def policy_rate_archive(n: int = 10) -> List[Dict[str, Any]]:
         raise UpstreamResponseError(f"Unable to fetch RBI policy-rate page: {exc}") from exc
 
     try:
+        import pandas as pd
         tables = pd.read_html(StringIO(response.text))
     except ValueError as exc:
         raise UpstreamResponseError("RBI policy-rate page did not contain readable tables") from exc
@@ -64,7 +64,7 @@ def policy_rate_archive(n: int = 10) -> List[Dict[str, Any]]:
     return records[: max(1, int(n))]
 
 
-def _table_to_mapping(frame: pd.DataFrame) -> Dict[str, Any]:
+def _table_to_mapping(frame: Any) -> Dict[str, Any]:
     mapping: Dict[str, Any] = {}
     for row in frame.itertuples(index=False):
         values = list(row)
@@ -78,4 +78,3 @@ def _table_to_mapping(frame: pd.DataFrame) -> Dict[str, Any]:
             value = clean_text(value[1:])
         mapping[key] = value
     return mapping
-

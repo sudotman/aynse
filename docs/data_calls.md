@@ -99,6 +99,9 @@ All live methods return library-defined top-level payloads.
   - `quote_type`, `symbol`, `company_name`, `isin`, `industry`, `listing_date`, `is_fno`, `identifier`, `price`, `week_range`, `metadata`
 - `NSELive.stock_quote_fno(symbol) -> dict`
   - Includes `derivative_details`
+- `NSELive.option_chain_contract_info(symbol) -> dict`
+  - Keys:
+  - `symbol`, `expiry_dates`, `strike_prices`
 - `NSELive.trade_info(symbol) -> dict`
   - Keys:
   - `symbol`, `bulk_block_deals`, `market_depth`, `security_wise_dp`, `metadata`
@@ -130,11 +133,12 @@ All live methods return library-defined top-level payloads.
 
 ### Option chains
 
-- `NSELive.index_option_chain(symbol="NIFTY") -> dict`
-- `NSELive.equities_option_chain(symbol) -> dict`
+- `NSELive.index_option_chain(symbol="NIFTY", expiry=None) -> dict`
+- `NSELive.equities_option_chain(symbol, expiry=None) -> dict`
 - `NSELive.currency_option_chain(symbol="USDINR") -> dict`
   - Keys:
   - `symbol`, `market_type`, `timestamp`, `underlying_value`, `expiry_dates`, `strike_prices`, `records`, `summary`
+  - Index and equity chains also include the validated `selected_expiry`.
   - Each `records` row contains:
   - `strike_price`, `expiry_date`, `call`, `put`
 
@@ -178,18 +182,28 @@ All live methods return library-defined top-level payloads.
 - `supported_event_categories() -> list[str]`
 - `dataset_capabilities() -> dict`
 - `add_returns(records, price_field="close") -> list[dict]`
-- `add_rolling_volatility(records, window=20, price_field="close") -> list[dict]`
+- `add_rolling_volatility(records, window=20, price_field="close", annualization_period=252) -> list[dict]`
+- `add_moving_average(records, window=20, price_field="close", kind="simple", output_field=None) -> list[dict]`
+- `add_rsi(records, window=14, price_field="close") -> list[dict]`
+- `add_atr(records, window=14) -> list[dict]`
+- `add_bollinger_bands(records, window=20, standard_deviations=2.0, price_field="close") -> list[dict]`
+  - Indicator fields: `moving_average` (or `output_field`), `rsi`, `atr`, and `bollinger_middle` / `bollinger_upper` / `bollinger_lower`
 - `add_drawdown(records, price_field="close") -> list[dict]`
 - `add_gap_metrics(records) -> list[dict]`
 - `add_volume_metrics(records, window=20) -> list[dict]`
 - `summarize_option_chain(chain) -> dict`
-- `analyze_event_window(price_records, events, window_before=5, window_after=5) -> list[dict]`
+  - Positioning fields include total call/put OI, change in OI, volume, PCR,
+    ATM strike/IV, call/put walls, `max_pain`, and `max_pain_payout`.
+- `analyze_event_window(price_records, events, window_before=5, window_after=5, alignment="next") -> list[dict]`
+  - `alignment` may be `exact`, `next`, `previous`, or `nearest`; weekend and
+    holiday events default to the next observable trading session.
 
 ## Batching and streaming
 
-- `batch_stock_requests(symbols, from_date, to_date, series="EQ", batcher=None) -> list[BatchResult]`
-- `batch_index_requests(symbols, from_date, to_date, batcher=None) -> list[BatchResult]`
-- `batch_derivatives_requests(requests_data, batcher=None) -> list[BatchResult]`
+- `batch_stock_requests(symbols, from_date, to_date, series="EQ", batcher=None, output="csv") -> list[BatchResult]`
+- `batch_index_requests(symbols, from_date, to_date, batcher=None, output="csv") -> list[BatchResult]`
+- `batch_derivatives_requests(requests_data, batcher=None, output="csv") -> list[BatchResult]`
+  - Use `output="records"` to return canonical in-memory rows without writing files.
 - `StreamingProcessor.process_csv_file(...) -> Any`
 - `StreamingProcessor.process_csv_string(...) -> Any`
 - `StreamingProcessor.process_json_file(...) -> Any`

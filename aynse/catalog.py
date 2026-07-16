@@ -82,6 +82,10 @@ def dataset_capabilities() -> dict[str, Any]:
             "datasets": [
                 "returns",
                 "rolling_volatility",
+                "moving_average",
+                "rsi",
+                "atr",
+                "bollinger_bands",
                 "drawdown",
                 "gap_metrics",
                 "volume_metrics",
@@ -95,4 +99,3 @@ def dataset_capabilities() -> dict[str, Any]:
             "supported_event_categories": supported_event_categories(),
         },
     }
-

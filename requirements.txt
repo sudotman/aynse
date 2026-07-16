@@ -2,7 +2,6 @@ requests
 click>=7.1.2
 appdirs>=1.4.4
 beautifulsoup4>=4.9.3
-brotli
 pandas
 httpx[http2]>=0.27.0
 tenacity>=8.2.3

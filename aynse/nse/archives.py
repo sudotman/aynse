@@ -10,9 +10,9 @@ import zipfile
 import pprint
 import json
 import gzip
-import pandas as pd
 import requests
 from io import StringIO
+from typing import Optional
 from ..standard import (
     DateLike,
     DataUnavailableError,
@@ -29,7 +29,7 @@ from ..standard import (
     write_records_csv,
     write_records_json,
 )
-from .connection_pool import get_connection_pool
+from .connection_pool import NSEConnectionPool, get_connection_pool
 from .http_client import NSEHttpClient
 def unzip(function):
     
@@ -59,18 +59,56 @@ class NSEArchives:
     timeout = 4 
        
     def __init__(self):
-        # Centralized clients
-        self.connection_pool = get_connection_pool()
-        self.client_arch: NSEHttpClient = self.connection_pool.get_client(self.base_url)
-        self.client_nse: NSEHttpClient = self.connection_pool.get_client("https://www.nseindia.com")
+        # Pool and clients are acquired only by the first operation that needs
+        # them. This keeps module-level compatibility singletons lightweight.
+        self._connection_pool: Optional[NSEConnectionPool] = None
+        self._client_arch: Optional[NSEHttpClient] = None
+        self._client_nse: Optional[NSEHttpClient] = None
 
         self._routes = {
                 "bhavcopy": "/content/historical/EQUITIES/{yyyy}/{MMM}/cm{dd}{MMM}{yyyy}bhav.csv.zip",
                 "bhavcopy_full": "/products/content/sec_bhavdata_full_{dd}{mm}{yyyy}.csv",
                 "bulk_deals": "/content/equities/bulk.csv",
                 "bhavcopy_fo": "/content/historical/DERIVATIVES/{yyyy}/{MMM}/fo{dd}{MMM}{yyyy}bhav.csv.zip"
-            }
+        }
         # Clients handle priming internally; no explicit setup required
+
+    @property
+    def connection_pool(self) -> NSEConnectionPool:
+        """Return the shared connection pool, creating it on first use."""
+        if self._connection_pool is None:
+            self._connection_pool = get_connection_pool()
+        return self._connection_pool
+
+    @connection_pool.setter
+    def connection_pool(self, value: NSEConnectionPool) -> None:
+        self._connection_pool = value
+        self._client_arch = None
+        self._client_nse = None
+
+    @property
+    def client_arch(self) -> NSEHttpClient:
+        """Return the archive-host client, acquired lazily."""
+        if self._client_arch is None:
+            self._client_arch = self.connection_pool.get_client(self.base_url)
+        return self._client_arch
+
+    @client_arch.setter
+    def client_arch(self, value: NSEHttpClient) -> None:
+        self._client_arch = value
+
+    @property
+    def client_nse(self) -> NSEHttpClient:
+        """Return the NSE API client, acquired lazily."""
+        if self._client_nse is None:
+            self._client_nse = self.connection_pool.get_client(
+                "https://www.nseindia.com"
+            )
+        return self._client_nse
+
+    @client_nse.setter
+    def client_nse(self, value: NSEHttpClient) -> None:
+        self._client_nse = value
 
     def _csv_rows(self, csv_text: str) -> list[dict]:
         reader = csv.DictReader(csv_text.splitlines())
@@ -108,8 +146,11 @@ class NSEArchives:
         """Make API request with automatic retry and session management"""
         path = self._routes[rout].format(**params)
         client_arch = self.connection_pool.get_client(self.base_url)
-        self.r = client_arch._request_with_retry("GET", path)
-        return self.r
+        response = client_arch._request_with_retry("GET", path)
+        # Preserve the historical debug attribute without using it as the
+        # return source; archive helpers can be called concurrently.
+        self.r = response
+        return response
     
     def _get_new_bhavcopy(self, dt):
         """Get bhavcopy using new NSE API (after July 8, 2024)"""
@@ -527,9 +568,6 @@ class NSEIndexConstituents(NSEArchives):
           "Cache-Control": "no-cache",
           "Connection": "keep-alive",
         }
-
-        # Switch client to niftyindices host
-        self.client_arch = self.connection_pool.get_client(self.base_url)
 
     def _build_routes(self) -> dict:
         routes = {}

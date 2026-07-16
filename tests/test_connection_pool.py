@@ -11,6 +11,7 @@ Tests cover:
 
 from __future__ import annotations
 
+import asyncio
 import time
 import threading
 from unittest.mock import patch, MagicMock
@@ -22,7 +23,7 @@ from aynse.nse.connection_pool import (
     get_connection_pool,
     reset_connection_pool,
 )
-from aynse.nse.http_client import NSEHttpClient
+from aynse.nse.http_client import NSEAsyncHttpClient, NSEHttpClient
 
 
 class TestNSEConnectionPool:
@@ -64,8 +65,8 @@ class TestNSEConnectionPool:
         pool._clients["www.nseindia.com"] = {
             "client_0": {
                 "client": mock_client,
-                "created": time.time(),
-                "last_used": time.time(),
+                "created": time.monotonic(),
+                "last_used": time.monotonic(),
             }
         }
         
@@ -102,8 +103,8 @@ class TestNSEConnectionPool:
         pool._clients["www.nseindia.com"] = {
             "client_0": {
                 "client": mock_client,
-                "created": time.time(),
-                "last_used": time.time(),
+                "created": time.monotonic(),
+                "last_used": time.monotonic(),
             }
         }
         
@@ -122,8 +123,8 @@ class TestNSEConnectionPool:
         pool._clients["www.nseindia.com"] = {
             "client_0": {
                 "client": mock_client,
-                "created": time.time() - 10,  # 10 seconds ago
-                "last_used": time.time() - 10,
+                "created": time.monotonic() - 10,  # 10 seconds ago
+                "last_used": time.monotonic() - 10,
             }
         }
         
@@ -134,6 +135,41 @@ class TestNSEConnectionPool:
         
         # Old client should have been closed
         mock_client.close.assert_called()
+
+    @pytest.mark.parametrize(
+        "kwargs",
+        [
+            {"session_ttl": 0},
+            {"session_ttl": True},
+            {"max_sessions": -1},
+        ],
+    )
+    def test_pool_rejects_invalid_configuration(self, kwargs):
+        with pytest.raises(ValueError):
+            NSEConnectionPool(**kwargs)
+
+    @pytest.mark.parametrize("method_name", ["get_client", "get_async_client"])
+    def test_pool_rejects_invalid_base_url(self, method_name):
+        pool = NSEConnectionPool()
+
+        with pytest.raises(ValueError, match="absolute HTTP"):
+            getattr(pool, method_name)("nseindia.com")
+
+    def test_aclose_all_awaits_async_clients(self):
+        pool = NSEConnectionPool()
+        async_client = MagicMock(spec=NSEAsyncHttpClient)
+        pool._aclients["www.nseindia.com"] = {
+            "aclient_0": {
+                "client": async_client,
+                "created": time.monotonic(),
+                "last_used": time.monotonic(),
+            }
+        }
+
+        asyncio.run(pool.aclose_all())
+
+        async_client.aclose.assert_awaited_once()
+        assert pool._aclients == {}
 
 
 class TestGlobalConnectionPool:

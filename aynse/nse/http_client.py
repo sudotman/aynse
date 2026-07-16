@@ -12,27 +12,35 @@ Provides sync and async clients with:
 
 from __future__ import annotations
 
-import time
+import asyncio
+import logging
 import threading
+import time
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
+from urllib.parse import urlparse
 
 import httpx
 from tenacity import (
     retry,
+    retry_if_exception,
     retry_if_exception_type,
     retry_if_result,
-    retry_if_exception,
     stop_after_attempt,
     wait_exponential_jitter,
 )
-import asyncio
-import logging
 
 from ..standard import UpstreamResponseError
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
+
+_JSON_EXTENSION_KEY = "aynse.decoded_json"
+_PRIMING_HOSTS = {"nseindia.com", "www.nseindia.com"}
+
+
+class _RetryableContentError(UpstreamResponseError):
+    """A successful response that looks like an NSE block/error page."""
 
 _DEFAULT_UAS = [
     # Short, reasonable rotation of UAs
@@ -54,7 +62,7 @@ def _default_headers() -> Dict[str, str]:
         "sec-fetch-site": "same-origin",
         "User-Agent": ua,
         "Accept": "*/*",
-        "Accept-Encoding": "gzip, deflate, br",
+        "Accept-Encoding": "gzip, deflate",
         "Accept-Language": "en-GB,en-US;q=0.9,en;q=0.8",
         "Cache-Control": "no-cache",
         "Connection": "keep-alive",
@@ -66,6 +74,40 @@ def _is_retryable_response(resp: Optional[httpx.Response]) -> bool:
         return False
     return resp.status_code in (302, 403, 429, 500, 502, 503, 504)
 
+
+def _prime_path_for(base_url: str) -> Optional[str]:
+    """Return the cookie-prime path only for NSE's interactive web host."""
+    hostname = (urlparse(base_url).hostname or "").lower()
+    if hostname in _PRIMING_HOSTS:
+        return "/get-quotes/equity"
+    return None
+
+
+def _decode_json_response(resp: httpx.Response) -> Any:
+    """Validate and decode a JSON response once, caching the decoded value."""
+    if _JSON_EXTENSION_KEY in resp.extensions:
+        return resp.extensions[_JSON_EXTENSION_KEY]
+
+    try:
+        source_url = str(resp.request.url)
+    except RuntimeError:
+        source_url = "<unknown>"
+    content_type = resp.headers.get("content-type", "")
+    media_type = content_type.split(";", 1)[0].strip().lower()
+    if media_type != "application/json" and not media_type.endswith("+json"):
+        raise UpstreamResponseError(
+            f"Unexpected content-type {content_type or '<missing>'!r} "
+            f"from {source_url} (status {resp.status_code})"
+        )
+    try:
+        decoded = resp.json()
+    except ValueError as exc:
+        raise UpstreamResponseError(
+            f"Invalid JSON from {source_url} (status {resp.status_code})"
+        ) from exc
+    resp.extensions[_JSON_EXTENSION_KEY] = decoded
+    return decoded
+
 def _retry_decorator():
     return retry(
         reraise=True,
@@ -73,6 +115,7 @@ def _retry_decorator():
         wait=wait_exponential_jitter(initial=0.5, max=5.0),
         retry=(
             retry_if_exception_type(httpx.HTTPError)
+            | retry_if_exception_type(_RetryableContentError)
             | retry_if_exception(lambda e: isinstance(e, RuntimeError) and "client has been closed" in str(e))
             | retry_if_result(_is_retryable_response)
         ),
@@ -98,7 +141,7 @@ class CircuitBreaker:
             if self._opened_at is None:
                 return True
             # Half-open after timeout
-            if (time.time() - self._opened_at) >= self.reset_timeout:
+            if (time.monotonic() - self._opened_at) >= self.reset_timeout:
                 return True
             return False
 
@@ -111,7 +154,7 @@ class CircuitBreaker:
         with self._lock:
             self._failures += 1
             if self._failures >= self.failure_threshold:
-                self._opened_at = time.time()
+                self._opened_at = time.monotonic()
 
 
 class TokenBucket:
@@ -122,26 +165,70 @@ class TokenBucket:
     """
 
     def __init__(self, tokens: int = 10, refill_rate: float = 10.0) -> None:
-        self.capacity = tokens
-        self.tokens = tokens
-        self.refill_rate = refill_rate
+        if isinstance(tokens, bool) or not isinstance(tokens, int) or tokens <= 0:
+            raise ValueError("tokens must be a positive integer")
+        if isinstance(refill_rate, bool) or refill_rate <= 0:
+            raise ValueError("refill_rate must be positive")
+        self.capacity = float(tokens)
+        self.tokens = float(tokens)
+        self.refill_rate = float(refill_rate)
         self._lock = threading.Lock()
-        self._last_refill = time.time()
+        self._last_refill = time.monotonic()
 
     def acquire(self, cost: int = 1) -> None:
+        if isinstance(cost, bool) or not isinstance(cost, int) or cost <= 0:
+            raise ValueError("cost must be a positive integer")
+        if cost > self.capacity:
+            raise ValueError("cost cannot exceed bucket capacity")
         while True:
             with self._lock:
-                now = time.time()
+                now = time.monotonic()
                 elapsed = now - self._last_refill
-                refill = elapsed * self.refill_rate
-                if refill >= 1:
-                    self.tokens = min(self.capacity, self.tokens + int(refill))
-                    self._last_refill = now
+                self.tokens = min(
+                    self.capacity,
+                    self.tokens + elapsed * self.refill_rate,
+                )
+                self._last_refill = now
                 if self.tokens >= cost:
                     self.tokens -= cost
                     return
-            # Sleep briefly before retrying
-            time.sleep(0.01)
+                delay = (cost - self.tokens) / self.refill_rate
+            time.sleep(max(0.001, delay))
+
+
+class AsyncTokenBucket:
+    """Event-loop friendly counterpart to :class:`TokenBucket`."""
+
+    def __init__(self, tokens: int = 10, refill_rate: float = 10.0) -> None:
+        if isinstance(tokens, bool) or not isinstance(tokens, int) or tokens <= 0:
+            raise ValueError("tokens must be a positive integer")
+        if isinstance(refill_rate, bool) or refill_rate <= 0:
+            raise ValueError("refill_rate must be positive")
+        self.capacity = float(tokens)
+        self.tokens = float(tokens)
+        self.refill_rate = float(refill_rate)
+        self._lock = asyncio.Lock()
+        self._last_refill = time.monotonic()
+
+    async def acquire(self, cost: int = 1) -> None:
+        if isinstance(cost, bool) or not isinstance(cost, int) or cost <= 0:
+            raise ValueError("cost must be a positive integer")
+        if cost > self.capacity:
+            raise ValueError("cost cannot exceed bucket capacity")
+        while True:
+            async with self._lock:
+                now = time.monotonic()
+                elapsed = now - self._last_refill
+                self.tokens = min(
+                    self.capacity,
+                    self.tokens + elapsed * self.refill_rate,
+                )
+                self._last_refill = now
+                if self.tokens >= cost:
+                    self.tokens -= cost
+                    return
+                delay = (cost - self.tokens) / self.refill_rate
+            await asyncio.sleep(max(0.001, delay))
 
 
 class NSEHttpClient:
@@ -166,8 +253,9 @@ class NSEHttpClient:
         self._max_connections = max_connections
         self._limits = httpx.Limits(max_keepalive_connections=max_connections, max_connections=max_connections)
         self._client = self._build_client()
-        # Best-effort cookie/session priming
-        self._prime_session()
+        self._prime_path = _prime_path_for(self.base_url)
+        self._primed = self._prime_path is None
+        self._prime_lock = threading.Lock()
 
     def _build_client(self) -> httpx.Client:
         return httpx.Client(
@@ -175,6 +263,7 @@ class NSEHttpClient:
             timeout=httpx.Timeout(self.timeout),
             headers=_default_headers(),
             http2=True,
+            follow_redirects=True,
             limits=self._limits,
         )
 
@@ -184,13 +273,29 @@ class NSEHttpClient:
         except Exception:
             pass
         self._client = self._build_client()
+        self._primed = self._prime_path is None
 
-    def _prime_session(self) -> None:
-        try:
-            self._client.get("/get-quotes/equity", params={"symbol": "SBIN"})
-        except Exception:
-            # Priming is best-effort
-            pass
+    def _prime_session(self, *, force: bool = False) -> None:
+        """Prime NSE cookies lazily so importing aynse never performs I/O."""
+        if self._prime_path is None:
+            self._primed = True
+            return
+        with self._prime_lock:
+            if self._primed and not force:
+                return
+            try:
+                self._client.get(
+                    self._prime_path,
+                    params={"symbol": "SBIN"},
+                    timeout=min(self.timeout, 5.0),
+                )
+            except Exception as exc:
+                # Priming is best-effort; the requested API call may still work.
+                logger.debug("nse_session_prime_failed", exc_info=exc)
+            finally:
+                # Mark the attempt complete so a failed best-effort prime does not
+                # add its timeout to every otherwise-successful API request.
+                self._primed = True
 
     def close(self) -> None:
         self._client.close()
@@ -210,9 +315,18 @@ class NSEHttpClient:
             raise CircuitOpenError("Circuit is open due to repeated failures")
 
     @_retry_decorator()
-    def _request_with_retry(self, method: str, url: str, **kwargs) -> httpx.Response:
+    def _request_with_retry(
+        self,
+        method: str,
+        url: str,
+        *,
+        _expect_json: bool = False,
+        **kwargs: Any,
+    ) -> httpx.Response:
         self._check_circuit()
         self._rate.acquire()
+        if not self._primed:
+            self._prime_session()
         start = time.time()
         try:
             resp = self._client.request(method, url, **kwargs)
@@ -225,12 +339,25 @@ class NSEHttpClient:
             raise exc
 
         if _is_retryable_response(resp):
+            self._circuit.record_failure()
             # Respect Retry-After for 429
             self._respect_retry_after(resp)
             # Attempt re-priming on 403 and try again
             if resp.status_code == 403:
-                self._prime_session()
+                self._primed = False
+                self._prime_session(force=True)
         else:
+            if _expect_json:
+                try:
+                    _decode_json_response(resp)
+                except UpstreamResponseError as exc:
+                    self._circuit.record_failure()
+                    if 200 <= resp.status_code < 300:
+                        # A 2xx HTML page is usually an NSE anti-bot response.
+                        self._primed = False
+                        self._prime_session(force=True)
+                        raise _RetryableContentError(str(exc)) from exc
+                    raise
             self._circuit.record_success()
 
         duration = time.time() - start
@@ -246,19 +373,22 @@ class NSEHttpClient:
         return self._request_with_retry("GET", path, params=params)
 
     def get_json(self, path: str, params: Optional[Dict[str, Any]] = None) -> Any:
-        resp = self.get(path, params)
-        ctype = resp.headers.get("content-type", "")
-        if "application/json" not in ctype:
-            # NSE sometimes serves HTML/blocked pages; force a retry by raising
-            raise UpstreamResponseError(f"Unexpected content-type: {ctype}")
-        return resp.json()
+        resp = self._request_with_retry(
+            "GET",
+            path,
+            params=params,
+            _expect_json=True,
+        )
+        return _decode_json_response(resp)
 
     def post_json(self, path: str, json: Optional[Dict[str, Any]] = None) -> Any:
-        resp = self._request_with_retry("POST", path, json=json)
-        ctype = resp.headers.get("content-type", "")
-        if "application/json" not in ctype:
-            raise UpstreamResponseError(f"Unexpected content-type: {ctype}")
-        return resp.json()
+        resp = self._request_with_retry(
+            "POST",
+            path,
+            json=json,
+            _expect_json=True,
+        )
+        return _decode_json_response(resp)
 
 
 class NSEAsyncHttpClient:
@@ -277,12 +407,13 @@ class NSEAsyncHttpClient:
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         self._circuit = circuit_breaker or CircuitBreaker(failure_threshold=50)
-        self._rate = TokenBucket(tokens=rate_limit_per_sec, refill_rate=float(rate_limit_per_sec))
+        self._rate = AsyncTokenBucket(tokens=rate_limit_per_sec, refill_rate=float(rate_limit_per_sec))
 
         self._limits = httpx.Limits(max_keepalive_connections=max_connections, max_connections=max_connections)
         self._client = self._build_client()
-        self._primed = False
-        self._prime_lock = asyncio.Lock()  # type: ignore[name-defined]
+        self._prime_path = _prime_path_for(self.base_url)
+        self._primed = self._prime_path is None
+        self._prime_lock = asyncio.Lock()
 
     def _build_client(self) -> httpx.AsyncClient:
         return httpx.AsyncClient(
@@ -290,40 +421,48 @@ class NSEAsyncHttpClient:
             timeout=httpx.Timeout(self.timeout),
             headers=_default_headers(),
             http2=True,
+            follow_redirects=True,
             limits=self._limits,
         )
 
-    def _recreate_client(self) -> None:
+    async def _recreate_client(self) -> None:
+        old_client = self._client
+        self._client = self._build_client()
+        self._primed = self._prime_path is None
         try:
-            # Fire-and-forget close (cannot await here)
-            close = getattr(self._client, "aclose", None)
-            if callable(close):
-                pass
+            await old_client.aclose()
         except Exception:
             pass
-        self._client = self._build_client()
 
     async def aclose(self) -> None:
         await self._client.aclose()
 
-    async def _aprime_session(self) -> None:
+    async def _aprime_session(self, *, force: bool = False) -> None:
+        if self._prime_path is None:
+            self._primed = True
+            return
         # Ensure only one priming runs at a time
         async with self._prime_lock:
-            if self._primed:
+            if self._primed and not force:
                 return
             try:
-                await self._client.get("/get-quotes/equity", params={"symbol": "SBIN"})
-            except Exception:
-                pass
-            self._primed = True
+                await self._client.get(
+                    self._prime_path,
+                    params={"symbol": "SBIN"},
+                    timeout=min(self.timeout, 5.0),
+                )
+            except Exception as exc:
+                logger.debug("nse_async_session_prime_failed", exc_info=exc)
+            finally:
+                self._primed = True
 
-    def _respect_retry_after(self, resp: httpx.Response) -> None:
+    async def _respect_retry_after(self, resp: httpx.Response) -> None:
         if resp.status_code == 429:
             ra = resp.headers.get("Retry-After")
             if ra:
                 try:
                     delay = float(ra)
-                    time.sleep(min(delay, 5.0))
+                    await asyncio.sleep(min(delay, 5.0))
                 except Exception:
                     pass
 
@@ -332,9 +471,16 @@ class NSEAsyncHttpClient:
             raise CircuitOpenError("Circuit is open due to repeated failures")
 
     @_retry_decorator()
-    async def _request_with_retry(self, method: str, url: str, **kwargs) -> httpx.Response:
+    async def _request_with_retry(
+        self,
+        method: str,
+        url: str,
+        *,
+        _expect_json: bool = False,
+        **kwargs: Any,
+    ) -> httpx.Response:
         self._check_circuit()
-        self._rate.acquire()
+        await self._rate.acquire()
 
         # Best-effort priming on first call
         if not self._primed:
@@ -348,19 +494,30 @@ class NSEAsyncHttpClient:
         except Exception as exc:
             self._circuit.record_failure()
             if isinstance(exc, RuntimeError) and "client has been closed" in str(exc):
-                self._recreate_client()
+                await self._recreate_client()
             raise exc
 
         if _is_retryable_response(resp):
-            self._respect_retry_after(resp)
+            self._circuit.record_failure()
+            await self._respect_retry_after(resp)
             if resp.status_code == 403:
                 # Try to re-prime
                 try:
                     self._primed = False
-                    await self._aprime_session()
+                    await self._aprime_session(force=True)
                 except Exception:
                     pass
         else:
+            if _expect_json:
+                try:
+                    _decode_json_response(resp)
+                except UpstreamResponseError as exc:
+                    self._circuit.record_failure()
+                    if 200 <= resp.status_code < 300:
+                        self._primed = False
+                        await self._aprime_session(force=True)
+                        raise _RetryableContentError(str(exc)) from exc
+                    raise
             self._circuit.record_success()
 
         return resp
@@ -369,17 +526,21 @@ class NSEAsyncHttpClient:
         return await self._request_with_retry("GET", path, params=params)
 
     async def get_json(self, path: str, params: Optional[Dict[str, Any]] = None) -> Any:
-        resp = await self.get(path, params)
-        ctype = resp.headers.get("content-type", "")
-        if "application/json" not in ctype:
-            raise UpstreamResponseError(f"Unexpected content-type: {ctype}")
-        return resp.json()
+        resp = await self._request_with_retry(
+            "GET",
+            path,
+            params=params,
+            _expect_json=True,
+        )
+        return _decode_json_response(resp)
 
     async def post_json(self, path: str, json: Optional[Dict[str, Any]] = None) -> Any:
-        resp = await self._request_with_retry("POST", path, json=json)
-        ctype = resp.headers.get("content-type", "")
-        if "application/json" not in ctype:
-            raise UpstreamResponseError(f"Unexpected content-type: {ctype}")
-        return resp.json()
+        resp = await self._request_with_retry(
+            "POST",
+            path,
+            json=json,
+            _expect_json=True,
+        )
+        return _decode_json_response(resp)
 
 

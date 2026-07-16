@@ -104,6 +104,8 @@ summary = summarize_option_chain(chain)
 
 print(summary["at_the_money_strike"])
 print(summary["put_call_ratio"])
+print(summary["max_pain"])
+print(summary["at_the_money_implied_volatility"])
 ```
 
 ### metadata
@@ -186,6 +188,10 @@ Option-chain methods return:
 - `records`
 - `summary`
 
+The summary includes call/put open interest, changes in open interest, traded
+volume, PCR, ATM strike and implied volatility, strongest call/put walls, and
+the open-interest-weighted max-pain strike.
+
 ## public API highlights
 
 ### historical + archives
@@ -202,7 +208,7 @@ Option-chain methods return:
 ### live + metadata
 
 - `NSELive.stock_quote`, `stock_quote_fno`, `trade_info`, `market_status`
-- `NSELive.index_option_chain`, `equities_option_chain`, `currency_option_chain`
+- `NSELive.option_chain_contract_info`, `index_option_chain`, `equities_option_chain`, `currency_option_chain`
 - `NSELive.corporate_announcements`, `corporate_actions`, `results_calendar`
 - `NSELive.metadata`
 - `dataset_capabilities`, `supported_indices`, `supported_instruments`, `supported_event_categories`
@@ -210,7 +216,11 @@ Option-chain methods return:
 ### analytics
 
 - `add_returns`
-- `add_rolling_volatility`
+- `add_rolling_volatility` (configurable annualization period)
+- `add_moving_average` (simple or exponential)
+- `add_rsi`
+- `add_atr`
+- `add_bollinger_bands`
 - `add_drawdown`
 - `add_gap_metrics`
 - `add_volume_metrics`

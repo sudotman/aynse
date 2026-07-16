@@ -18,6 +18,9 @@ import time
 import gzip
 import calendar
 import hashlib
+import importlib
+import importlib.util
+import re
 import threading
 import logging
 from datetime import datetime, timedelta, date
@@ -43,13 +46,24 @@ logger.addHandler(logging.NullHandler())
 T = TypeVar('T')
 F = TypeVar('F', bound=Callable[..., Any])
 
-# Optional numpy import
-try:
-    import numpy as np
-    HAS_NUMPY = True
-except ImportError:
-    np = None  # type: ignore[assignment]
-    HAS_NUMPY = False
+# Discover NumPy without importing it. Importing heavy optional dependencies at
+# module load made a simple import of aynse take several seconds.
+np = None
+HAS_NUMPY = importlib.util.find_spec("numpy") is not None
+
+
+def _load_numpy() -> Any:
+    global np
+    if np is not None:
+        return np
+    try:
+        np = importlib.import_module("numpy")
+    except ImportError as exc:
+        raise NumpyNotAvailableError(
+            "numpy is required for this function. "
+            "Install it with: pip install numpy pandas"
+        ) from exc
+    return np
 
 
 class NumpyNotAvailableError(ModuleNotFoundError):
@@ -71,11 +85,7 @@ def require_numpy(func: F) -> F:
         NumpyNotAvailableError: If numpy is not installed
     """
     def wrapper(*args: Any, **kwargs: Any) -> Any:
-        if not HAS_NUMPY:
-            raise NumpyNotAvailableError(
-                "numpy is required for this function. "
-                "Install it with: pip install numpy pandas"
-            )
+        _load_numpy()
         return func(*args, **kwargs)
     return wrapper  # type: ignore[return-value]
 
@@ -246,11 +256,21 @@ def kw_to_fname(**kwargs: Any) -> str:
         >>> kw_to_fname(symbol="RELIANCE", from_date=date(2024, 1, 1))
         '2024-01-01-RELIANCE'
     """
-    return "-".join(
+    raw = "-".join(
         str(kwargs[k]) 
         for k in sorted(kwargs) 
         if k != "self"
     )
+    safe = re.sub(r"[^0-9A-Za-z_-]+", "_", raw).strip("_-")
+    if not safe:
+        safe = "cache"
+    # Preserve readable legacy names when already safe. If sanitization was
+    # required, include a digest so distinct inputs cannot collapse onto the
+    # same cache file. Bound the filename for Windows path-length safety.
+    if safe != raw or len(safe) > 160:
+        digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:12]
+        safe = f"{safe[:140]}--{digest}"
+    return safe
 
 
 def cached(app_name: str, max_age_seconds: Optional[int] = None) -> Callable[[F], F]:
@@ -278,7 +298,9 @@ def cached(app_name: str, max_age_seconds: Optional[int] = None) -> Callable[[F]
             return data
     """
     CACHE_VERSION = "v1"
-    cache_lock = threading.RLock()
+    # Lock striping prevents duplicate writes for the same key without
+    # serializing unrelated symbols/date ranges behind one network request.
+    cache_locks = tuple(threading.RLock() for _ in range(64))
 
     def decorator(function: F) -> F:
         def wrapper(*args: Any, **kwargs: Any) -> Any:
@@ -295,6 +317,8 @@ def cached(app_name: str, max_age_seconds: Optional[int] = None) -> Callable[[F]
             # Generate cache file path
             file_name = kw_to_fname(**kwargs)
             cache_path = os.path.join(cache_dir, f"{CACHE_VERSION}__{file_name}.gz")
+            digest = hashlib.sha256(cache_path.encode("utf-8")).digest()
+            cache_lock = cache_locks[int.from_bytes(digest[:4], "big") % len(cache_locks)]
 
             with cache_lock:
                 if os.path.isfile(cache_path):
@@ -427,37 +451,47 @@ def live_cache(func: F) -> F:
         key_data = f"{func.__name__}:{','.join(inputs)}"
         cache_key = hashlib.md5(key_data.encode()).hexdigest()
 
-        now = datetime.now()
         time_out = getattr(self, 'time_out', 5)  # Default 5 seconds
 
-        # Initialize cache and lock if needed
-        if not hasattr(self, '_cache'):
-            self._cache: Dict[str, Dict[str, Any]] = {}
-        if not hasattr(self, '_cache_lock'):
-            self._cache_lock = threading.RLock()
+        # ``dict.setdefault`` avoids replacing state if two decorated methods
+        # are first invoked concurrently on the same instance.
+        state = self.__dict__
+        cache: Dict[str, Dict[str, Any]] = state.setdefault('_cache', {})
+        cache_lock = state.setdefault('_cache_lock', threading.RLock())
+        key_locks = state.setdefault(
+            '_cache_key_locks',
+            tuple(threading.RLock() for _ in range(64)),
+        )
+        key_lock = key_locks[int(cache_key[:8], 16) % len(key_locks)]
 
-        with self._cache_lock:
-            # Check for valid cached value
-            cache_obj = self._cache.get(cache_key)
-            if cache_obj:
-                age = now - cache_obj['timestamp']
-                if age < timedelta(seconds=time_out):
-                    return cache_obj['value']
+        # Single-flight identical requests while allowing unrelated symbols to
+        # fetch concurrently.
+        with key_lock:
+            now = time.monotonic()
+            with cache_lock:
+                cache_obj = cache.get(cache_key)
+                if cache_obj:
+                    age = now - float(cache_obj['timestamp'])
+                    if age < float(time_out):
+                        return cache_obj['value']
 
-            # Fetch new value
             value = func(self, *args, **kwargs)
-            self._cache[cache_key] = {'value': value, 'timestamp': now}
+            completed_at = time.monotonic()
+            with cache_lock:
+                cache[cache_key] = {
+                    'value': value,
+                    'timestamp': completed_at,
+                }
 
-            # Simple cache eviction: remove oldest entries if cache is too large
-            max_cache_size = getattr(self, '_max_cache_size', 100)
-            if len(self._cache) > max_cache_size:
-                # Sort by timestamp and remove oldest half
-                sorted_keys = sorted(
-                    self._cache.keys(),
-                    key=lambda k: self._cache[k]['timestamp']
-                )
-                for old_key in sorted_keys[:len(sorted_keys) // 2]:
-                    del self._cache[old_key]
+                max_cache_size = max(1, int(getattr(self, '_max_cache_size', 100)))
+                if len(cache) > max_cache_size:
+                    sorted_keys = sorted(
+                        cache.keys(),
+                        key=lambda k: cache[k]['timestamp'],
+                    )
+                    remove_count = max(1, len(sorted_keys) // 2)
+                    for old_key in sorted_keys[:remove_count]:
+                        del cache[old_key]
 
             return value
 

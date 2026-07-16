@@ -56,6 +56,20 @@ class TestStreamConfig:
         assert config.buffer_size == 4096
         assert config.encoding == 'latin-1'
 
+    @pytest.mark.parametrize(
+        ("field", "value"),
+        [
+            ("chunk_size", 0),
+            ("chunk_size", True),
+            ("max_memory_mb", -1),
+            ("buffer_size", "8192"),
+            ("encoding", ""),
+        ],
+    )
+    def test_invalid_config(self, field, value):
+        with pytest.raises(ValueError):
+            StreamConfig(**{field: value})
+
 
 class TestStreamingProcessor:
     """Tests for StreamingProcessor class."""
@@ -150,6 +164,58 @@ TCS,2024-01-15,3800,3850,3780,3820,2000000
         """Test combining empty results."""
         result = processor._combine_results([])
         assert result is None
+
+    def test_custom_reducer_combines_dictionary_counts_across_chunks(self, processor):
+        csv_data = """symbol,close
+A,1
+B,2
+C,3
+D,4
+E,5
+"""
+
+        result = processor.process_csv_string(
+            csv_data,
+            lambda chunk: {"count": len(chunk)},
+            reducer=lambda total, part: {"count": total["count"] + part["count"]},
+            initial={"count": 0},
+        )
+
+        assert result == {"count": 5}
+
+    def test_reducer_can_stop_after_global_head_limit(self, processor):
+        csv_data = """symbol,close
+A,1
+B,2
+C,3
+D,4
+E,5
+"""
+        chunks_processed = 0
+
+        def take_chunk(chunk):
+            nonlocal chunks_processed
+            chunks_processed += 1
+            return chunk
+
+        result = processor.process_csv_string(
+            csv_data,
+            take_chunk,
+            reducer=lambda rows, part: (rows + part)[:3],
+            initial=[],
+            stop_when=lambda rows: len(rows) >= 3,
+        )
+
+        assert [row["symbol"] for row in result] == ["A", "B", "C"]
+        assert chunks_processed == 2
+
+    def test_csv_without_header_keeps_first_row_as_data(self, processor):
+        rows = list(processor.iter_csv_string("A,1\nB,2\n", skip_header=False))
+
+        assert rows == [
+            {"column_0": "A", "column_1": "1"},
+            {"column_0": "B", "column_1": "2"},
+        ]
 
 
 class TestStreamingUtilities:
@@ -278,4 +344,30 @@ class TestMemoryEfficiency:
         assert max_chunk_size <= 100
         # Total should be correct
         assert result == 10000
+
+    def test_create_data_generator_yields_records_across_chunks(self, tmp_path):
+        file_path = tmp_path / "generator.csv"
+        file_path.write_text("symbol,close\nA,1\nB,2\nC,3\n", encoding="utf-8")
+
+        rows = list(create_data_generator(str(file_path), "csv", chunk_size=2))
+
+        assert [row["symbol"] for row in rows] == ["A", "B", "C"]
+
+    def test_default_combination_is_linear_in_chunk_count(self, monkeypatch):
+        processor = StreamingProcessor(StreamConfig(chunk_size=1))
+        combine_calls = 0
+        original = processor._combine_results
+
+        def track_combine(results):
+            nonlocal combine_calls
+            combine_calls += 1
+            return original(results)
+
+        monkeypatch.setattr(processor, "_combine_results", track_combine)
+        csv_data = "value\n" + "\n".join(str(value) for value in range(100))
+
+        result = processor.process_csv_string(csv_data, lambda rows: len(rows))
+
+        assert result == 100
+        assert combine_calls == 1
 

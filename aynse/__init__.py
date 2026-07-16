@@ -92,10 +92,14 @@ from .holidays import holidays, holiday_records
 from .rbi import RBI, policy_rate_archive
 from .catalog import dataset_capabilities, supported_event_categories, supported_indices, supported_instruments
 from .analytics import (
+    add_atr,
+    add_bollinger_bands,
     add_drawdown,
     add_gap_metrics,
+    add_moving_average,
     add_returns,
     add_rolling_volatility,
+    add_rsi,
     add_volume_metrics,
     analyze_event_window,
     summarize_option_chain,
@@ -181,6 +185,10 @@ __all__ = [
     # Analytics
     "add_returns",
     "add_rolling_volatility",
+    "add_moving_average",
+    "add_rsi",
+    "add_atr",
+    "add_bollinger_bands",
     "add_drawdown",
     "add_gap_metrics",
     "add_volume_metrics",

@@ -1,4 +1,5 @@
 import datetime
+import hashlib
 import os
 from unittest.mock import patch, Mock
 import pandas as pd
@@ -10,6 +11,8 @@ from unittest import TestCase
 from appdirs import user_cache_dir
 import pickle
 import time
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from pyfakefs.fake_filesystem_unittest import TestCase
 
 
@@ -50,6 +53,17 @@ def test_kw_to_fname():
     assert x == 'first-last'
     x = ut.kw_to_fname(self=[], symbol="SBIN", from_date=date(2020,1,1), to_date=date(2020,1,31))
     assert x == "2020-01-01-SBIN-2020-01-31"
+
+
+def test_kw_to_fname_prevents_path_traversal_and_collisions():
+    unsafe = ut.kw_to_fname(symbol="../../secret")
+    similar = ut.kw_to_fname(symbol="secret")
+
+    assert "/" not in unsafe
+    assert "\\" not in unsafe
+    assert ".." not in unsafe
+    assert unsafe != similar
+    assert unsafe == ut.kw_to_fname(symbol="../../secret")
 
 def demo_for_pool(a, b):
     return (a + b)**2
@@ -211,4 +225,97 @@ def test_live_cache():
     assert q.rt_quote() == v
     time.sleep(3)
     assert q.rt_quote() > v
+
+
+def test_cached_does_not_serialize_unrelated_keys(fs, monkeypatch):
+    monkeypatch.setenv("J_CACHE_DIR", "/cache")
+    barrier = threading.Barrier(2)
+
+    @ut.cached("parallel-cache")
+    def load(key):
+        barrier.wait(timeout=2)
+        return key
+
+    # Pick two cache keys that map to different lock stripes.
+    candidates = [f"key-{index}" for index in range(100)]
+    selected = None
+    stripes = {}
+    for key in candidates:
+        path = os.path.join(
+            "/cache",
+            "parallel-cache",
+            "parallel-cache",
+            f"v1__{key}.gz",
+        )
+        digest = hashlib.sha256(path.encode("utf-8")).digest()
+        stripe = int.from_bytes(digest[:4], "big") % 64
+        if stripes and stripe not in stripes:
+            selected = (next(iter(stripes.values())), key)
+            break
+        stripes[stripe] = key
+    assert selected is not None
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [executor.submit(load, key) for key in selected]
+        assert [future.result(timeout=3) for future in futures] == list(selected)
+
+
+def test_cached_computes_same_key_only_once(fs, monkeypatch):
+    monkeypatch.setenv("J_CACHE_DIR", "/cache")
+    calls = 0
+    calls_lock = threading.Lock()
+
+    @ut.cached("single-flight-cache")
+    def load(key):
+        nonlocal calls
+        with calls_lock:
+            calls += 1
+        time.sleep(0.02)
+        return key
+
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        results = list(executor.map(load, ["same"] * 4))
+
+    assert results == ["same"] * 4
+    assert calls == 1
+
+
+def test_live_cache_allows_unrelated_keys_to_fetch_concurrently():
+    barrier = threading.Barrier(2)
+
+    class ConcurrentQuotes:
+        time_out = 30
+
+        @ut.live_cache
+        def quote(self, symbol):
+            barrier.wait(timeout=2)
+            return symbol
+
+    quotes = ConcurrentQuotes()
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [executor.submit(quotes.quote, symbol) for symbol in ("A", "B")]
+        assert [future.result(timeout=3) for future in futures] == ["A", "B"]
+
+
+def test_live_cache_single_flights_identical_requests():
+    calls = 0
+    calls_lock = threading.Lock()
+
+    class ConcurrentQuotes:
+        time_out = 30
+
+        @ut.live_cache
+        def quote(self, symbol):
+            nonlocal calls
+            with calls_lock:
+                calls += 1
+            time.sleep(0.02)
+            return symbol
+
+    quotes = ConcurrentQuotes()
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        results = list(executor.map(quotes.quote, ["A"] * 4))
+
+    assert results == ["A"] * 4
+    assert calls == 1
 
