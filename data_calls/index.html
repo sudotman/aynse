@@ -1413,6 +1413,9 @@
 <li><code>quote_type</code>, <code>symbol</code>, <code>company_name</code>, <code>isin</code>, <code>industry</code>, <code>listing_date</code>, <code>is_fno</code>, <code>identifier</code>, <code>price</code>, <code>week_range</code>, <code>metadata</code></li>
 <li><code>NSELive.stock_quote_fno(symbol) -&gt; dict</code></li>
 <li>Includes <code>derivative_details</code></li>
+<li><code>NSELive.option_chain_contract_info(symbol) -&gt; dict</code></li>
+<li>Keys:</li>
+<li><code>symbol</code>, <code>expiry_dates</code>, <code>strike_prices</code></li>
 <li><code>NSELive.trade_info(symbol) -&gt; dict</code></li>
 <li>Keys:</li>
 <li><code>symbol</code>, <code>bulk_block_deals</code>, <code>market_depth</code>, <code>security_wise_dp</code>, <code>metadata</code></li>
@@ -1444,11 +1447,12 @@
 </ul>
 <h3 id="option-chains">Option chains<a class="headerlink" href="#option-chains" title="Permanent link">&para;</a></h3>
 <ul>
-<li><code>NSELive.index_option_chain(symbol="NIFTY") -&gt; dict</code></li>
-<li><code>NSELive.equities_option_chain(symbol) -&gt; dict</code></li>
+<li><code>NSELive.index_option_chain(symbol="NIFTY", expiry=None) -&gt; dict</code></li>
+<li><code>NSELive.equities_option_chain(symbol, expiry=None) -&gt; dict</code></li>
 <li><code>NSELive.currency_option_chain(symbol="USDINR") -&gt; dict</code></li>
 <li>Keys:</li>
 <li><code>symbol</code>, <code>market_type</code>, <code>timestamp</code>, <code>underlying_value</code>, <code>expiry_dates</code>, <code>strike_prices</code>, <code>records</code>, <code>summary</code></li>
+<li>Index and equity chains also include the validated <code>selected_expiry</code>.</li>
 <li>Each <code>records</code> row contains:</li>
 <li><code>strike_price</code>, <code>expiry_date</code>, <code>call</code>, <code>put</code></li>
 </ul>
@@ -1492,18 +1496,28 @@
 <li><code>supported_event_categories() -&gt; list[str]</code></li>
 <li><code>dataset_capabilities() -&gt; dict</code></li>
 <li><code>add_returns(records, price_field="close") -&gt; list[dict]</code></li>
-<li><code>add_rolling_volatility(records, window=20, price_field="close") -&gt; list[dict]</code></li>
+<li><code>add_rolling_volatility(records, window=20, price_field="close", annualization_period=252) -&gt; list[dict]</code></li>
+<li><code>add_moving_average(records, window=20, price_field="close", kind="simple", output_field=None) -&gt; list[dict]</code></li>
+<li><code>add_rsi(records, window=14, price_field="close") -&gt; list[dict]</code></li>
+<li><code>add_atr(records, window=14) -&gt; list[dict]</code></li>
+<li><code>add_bollinger_bands(records, window=20, standard_deviations=2.0, price_field="close") -&gt; list[dict]</code></li>
+<li>Indicator fields: <code>moving_average</code> (or <code>output_field</code>), <code>rsi</code>, <code>atr</code>, and <code>bollinger_middle</code> / <code>bollinger_upper</code> / <code>bollinger_lower</code></li>
 <li><code>add_drawdown(records, price_field="close") -&gt; list[dict]</code></li>
 <li><code>add_gap_metrics(records) -&gt; list[dict]</code></li>
 <li><code>add_volume_metrics(records, window=20) -&gt; list[dict]</code></li>
 <li><code>summarize_option_chain(chain) -&gt; dict</code></li>
-<li><code>analyze_event_window(price_records, events, window_before=5, window_after=5) -&gt; list[dict]</code></li>
+<li>Positioning fields include total call/put OI, change in OI, volume, PCR,
+    ATM strike/IV, call/put walls, <code>max_pain</code>, and <code>max_pain_payout</code>.</li>
+<li><code>analyze_event_window(price_records, events, window_before=5, window_after=5, alignment="next") -&gt; list[dict]</code></li>
+<li><code>alignment</code> may be <code>exact</code>, <code>next</code>, <code>previous</code>, or <code>nearest</code>; weekend and
+    holiday events default to the next observable trading session.</li>
 </ul>
 <h2 id="batching-and-streaming">Batching and streaming<a class="headerlink" href="#batching-and-streaming" title="Permanent link">&para;</a></h2>
 <ul>
-<li><code>batch_stock_requests(symbols, from_date, to_date, series="EQ", batcher=None) -&gt; list[BatchResult]</code></li>
-<li><code>batch_index_requests(symbols, from_date, to_date, batcher=None) -&gt; list[BatchResult]</code></li>
-<li><code>batch_derivatives_requests(requests_data, batcher=None) -&gt; list[BatchResult]</code></li>
+<li><code>batch_stock_requests(symbols, from_date, to_date, series="EQ", batcher=None, output="csv") -&gt; list[BatchResult]</code></li>
+<li><code>batch_index_requests(symbols, from_date, to_date, batcher=None, output="csv") -&gt; list[BatchResult]</code></li>
+<li><code>batch_derivatives_requests(requests_data, batcher=None, output="csv") -&gt; list[BatchResult]</code></li>
+<li>Use <code>output="records"</code> to return canonical in-memory rows without writing files.</li>
 <li><code>StreamingProcessor.process_csv_file(...) -&gt; Any</code></li>
 <li><code>StreamingProcessor.process_csv_string(...) -&gt; Any</code></li>
 <li><code>StreamingProcessor.process_json_file(...) -&gt; Any</code></li>
