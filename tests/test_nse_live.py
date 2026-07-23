@@ -5,13 +5,13 @@ n = NSELive()
 
 
 def test_stock_quote():
-    r = n.stock_quote("HDFC")
-    assert r["symbol"] == "HDFC"
+    r = n.stock_quote("HDFCBANK")
+    assert r["symbol"] == "HDFCBANK"
     assert "price" in r
 
 
 def test_stock_quote_fno():
-    r = n.stock_quote_fno("HDFC")
+    r = n.stock_quote_fno("HDFCBANK")
     assert "derivative_details" in r
     assert "strike_prices" in r["derivative_details"]
 
