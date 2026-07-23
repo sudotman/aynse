@@ -3,21 +3,21 @@ from datetime import date
 
 n = NSELive()
 
-@pytest.mark.integration
+
 def test_stock_quote():
     r = n.stock_quote("HDFCBANK")
     assert r["symbol"] == "HDFCBANK"
     assert "price" in r
 
-@pytest.mark.integration
+
 def test_stock_quote_fno():
     r = n.stock_quote_fno("HDFCBANK")
     assert "derivative_details" in r
     assert "strike_prices" in r["derivative_details"]
 
-@pytest.mark.integration
+
 def test_trade_info():
-    r = n.trade_info("HDFCBANK")
+    r = n.trade_info("HDFC")
     assert "bulk_block_deals" in r
     assert "market_depth" in r
 
@@ -50,7 +50,7 @@ def test_all_indices():
     assert "declines" in d
     assert len(d["indices"]) > 1
 
-@pytest.mark.integration
+
 def test_live_index():
     d = n.live_index("NIFTY 50")
     assert "advance" in d
@@ -74,7 +74,7 @@ def test_currency_option_chain():
     assert "records" in d
     assert "summary" in d
 
-@pytest.mark.integration
+
 def test_live_fno():
     d = n.live_fno()
     assert "name" in d
