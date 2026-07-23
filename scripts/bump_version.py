@@ -144,9 +144,11 @@ def main() -> int:
     print(f"\nVersion bumped from {current_version} to {new_version}")
     print("\nNext steps:")
     print(f"  1. Commit: git commit -am 'Bump version to {new_version}'")
-    print(f"  2. Tag:    git tag v{new_version}")
-    print(f"  3. Push:   git push && git push --tags")
-    print(f"  4. Create a GitHub release to trigger PyPI publish")
+    print("  2. Push:   git push")
+    print(
+        "  3. GitHub Actions will test, package, publish to PyPI, "
+        "tag, and create the release"
+    )
     
     return 0
 

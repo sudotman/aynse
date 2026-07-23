@@ -260,20 +260,26 @@ pytest tests -v --tb=short
 ```
 
 ## release workflow
-1. make your changes
-2. bump version
+
+releases are automated after the test workflow succeeds on `master`.
+
+1. make your changes and bump the version
+
 ```sh
 make bump-patch  # or bump-minor, bump-major
 ```
 
-3. commit and tag
+2. commit and push to `master`
+
 ```sh
 git commit -am "Bump version to X.Y.Z"
-git tag vX.Y.Z
-git push && git push --tags
+git push
 ```
 
-4. create github release → automatically publishes to pypi.
+if `X.Y.Z` is not already published, github actions builds and verifies the
+wheel and source distribution, publishes both to pypi, creates tag `vX.Y.Z`,
+and creates the github release. live NSE tests remain advisory because upstream
+availability is outside the package's control.
 
 ### everything to do with release/version control
 # show current version
