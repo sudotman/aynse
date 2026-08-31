@@ -238,6 +238,24 @@ def test_async_recreation_closes_old_client_and_resets_priming() -> None:
     asyncio.run(run())
 
 
+def test_async_components_can_be_constructed_without_a_running_loop() -> None:
+    bucket = AsyncTokenBucket(tokens=2, refill_rate=100.0)
+    client = NSEAsyncHttpClient(
+        base_url="https://nsearchives.nseindia.com",
+        rate_limit_per_sec=100,
+    )
+
+    assert bucket._lock is None
+    assert client._prime_lock is None
+
+    async def run() -> None:
+        await bucket.acquire()
+        await client.aclose()
+
+    asyncio.run(run())
+    assert bucket._lock is not None
+
+
 @pytest.mark.parametrize("bucket_type", [TokenBucket, AsyncTokenBucket])
 def test_token_buckets_reject_impossible_costs(bucket_type) -> None:
     bucket = bucket_type(tokens=2, refill_rate=1.0)

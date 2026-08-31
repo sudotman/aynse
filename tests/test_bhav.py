@@ -66,8 +66,8 @@ def test_expiry_dates():
 
     dts = expiry_dates(dt, "FUTIDX", "NIFTY")
     assert len(dts) >= 3
-    assert date(2020, 10, 1) in dts
-    assert date(2020, 10, 8) in dts
+    assert date(2020, 10, 29) in dts
+    assert date(2020, 11, 26) in dts
 
     dts = expiry_dates(dt, "FUTSTK", "RELIANCE")
     assert len(dts) >= 3
@@ -77,4 +77,3 @@ def test_expiry_dates():
     dts = expiry_dates(dt, "OPTSTK", "RELIANCE")
     assert date(2020, 10, 29) in dts
     assert date(2020, 11, 26) in dts
-

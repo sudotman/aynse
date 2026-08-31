@@ -253,3 +253,54 @@ def test_option_chain_rejects_symbols_without_expiries() -> None:
 
     paths = [call.args[0] for call in client.get_json.call_args_list]
     assert paths == ["/api/option-chain-contract-info"]
+
+
+def test_options_around_date_honors_both_window_boundaries() -> None:
+    live = object.__new__(NSELive)
+    live.equities_option_chain = MagicMock(
+        return_value={
+            "expiry_dates": [
+                date(2026, 7, 14),
+                date(2026, 7, 16),
+                date(2026, 7, 25),
+                date(2026, 7, 26),
+            ],
+            "records": [],
+            "summary": {},
+        }
+    )
+
+    result = live.get_options_around_date(
+        "reliance",
+        date(2026, 7, 20),
+        days_before=4,
+        days_after=5,
+    )
+
+    assert result["relevant_expiries"] == [
+        {"date": date(2026, 7, 16), "days_from_target": -4},
+        {"date": date(2026, 7, 25), "days_from_target": 5},
+    ]
+    assert result["primary_expiry"] == {
+        "date": date(2026, 7, 25),
+        "days_from_target": 5,
+    }
+
+
+@pytest.mark.parametrize(
+    ("days_before", "days_after"),
+    [(-1, 5), (5, -1), (True, 5), (5, 1.5)],
+)
+def test_options_around_date_rejects_invalid_windows(
+    days_before,
+    days_after,
+) -> None:
+    live = object.__new__(NSELive)
+
+    with pytest.raises(InputValidationError, match="non-negative integer"):
+        live.get_options_around_date(
+            "RELIANCE",
+            date(2026, 7, 20),
+            days_before=days_before,
+            days_after=days_after,
+        )

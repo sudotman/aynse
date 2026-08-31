@@ -1,4 +1,5 @@
 *.csv
+nse_cookies_requests.pkl
 .testmondata
 temp.py
 *.ipynb
@@ -148,3 +149,4 @@ dmypy.json
 cython_debug/
 
 .*
+!.dockerignore

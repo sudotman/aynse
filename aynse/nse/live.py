@@ -626,6 +626,15 @@ class NSELive:
         }
 
     def get_options_around_date(self, symbol, target_date, days_before=5, days_after=5) -> Dict[str, Any]:
+        for name, value in (
+            ("days_before", days_before),
+            ("days_after", days_after),
+        ):
+            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                raise InputValidationError(
+                    f"{name} must be a non-negative integer"
+                )
+
         target = coerce_date(target_date, "target_date")
         option_data = self.equities_option_chain(symbol)
         relevant_expiries = []
@@ -633,7 +642,7 @@ class NSELive:
             if expiry_date is None:
                 continue
             delta = (expiry_date - target).days
-            if delta >= -days_before and delta <= 45:
+            if -days_before <= delta <= days_after:
                 relevant_expiries.append(
                     {
                         "date": expiry_date,
@@ -641,8 +650,9 @@ class NSELive:
                     }
                 )
 
+        relevant_expiries.sort(key=lambda item: item["days_from_target"])
         primary_expiry = None
-        for expiry in sorted(relevant_expiries, key=lambda item: item["days_from_target"]):
+        for expiry in relevant_expiries:
             if expiry["days_from_target"] >= 0:
                 primary_expiry = expiry
                 break

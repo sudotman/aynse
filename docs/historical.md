@@ -151,7 +151,7 @@ print(pe_df.head())
 
 ### Get Expiry Dates
 
-For a given day, fetch expiry dates of all active contracts.
+For a given day, calculate scheduled expiry dates without network access.
 
 ```python
 from datetime import date
@@ -170,6 +170,12 @@ from aynse.nse import expiry_dates
 expiries = expiry_dates(date(2024, 1, 1), "FUTSTK")
 print(expiries)
 ```
+
+NIFTY index options include weekly expiries. Futures, stock options, and
+other current index options use their monthly cycle. The helper accounts for
+the exchange's published weekday transitions and trading holidays. For the
+currently listed contract master, use
+`NSELive.option_chain_contract_info(symbol)` instead.
 
 ### Master Functions for Derivatives Data
 

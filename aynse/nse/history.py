@@ -17,13 +17,14 @@ import itertools
 import csv
 import logging
 from math import isfinite
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from typing import Any, Callable, Dict, List, Optional, TYPE_CHECKING
 
 import httpx
 import click
 
 from .. import util as ut
+from ..holidays import get_trading_days
 from ..standard import (
     DateLike,
     InputValidationError,
@@ -70,6 +71,8 @@ STOCK_FIELDS = [
     "high",
     "low",
     "previous_close",
+    "last_traded_price",
+    # Compatibility alias retained for callers on aynse <= 2.3.
     "last_price",
     "close",
     "vwap",
@@ -84,6 +87,8 @@ DERIVATIVE_FIELDS = [
     "date",
     "symbol",
     "instrument_type",
+    "expiry_date",
+    # Compatibility alias retained for callers on aynse <= 2.3.
     "expiry",
     "option_type",
     "strike_price",
@@ -91,9 +96,12 @@ DERIVATIVE_FIELDS = [
     "high",
     "low",
     "close",
+    "last_traded_price",
     "last_price",
+    "settlement_price",
     "settle_price",
     "volume",
+    "lot_size",
     "market_lot",
     "turnover",
     "open_interest",
@@ -377,6 +385,7 @@ class NSEHistory:
         }
 
     def _canonical_stock_record(self, row: Dict[str, Any]) -> Dict[str, Any]:
+        last_traded_price = to_float(row.get("CH_LAST_TRADED_PRICE"))
         return {
             "date": coerce_date(row.get("CH_TIMESTAMP"), "CH_TIMESTAMP"),
             "symbol": normalize_symbol(row.get("CH_SYMBOL", "")),
@@ -385,7 +394,8 @@ class NSEHistory:
             "high": to_float(row.get("CH_TRADE_HIGH_PRICE")),
             "low": to_float(row.get("CH_TRADE_LOW_PRICE")),
             "previous_close": to_float(row.get("CH_PREVIOUS_CLS_PRICE")),
-            "last_price": to_float(row.get("CH_LAST_TRADED_PRICE")),
+            "last_traded_price": last_traded_price,
+            "last_price": last_traded_price,
             "close": to_float(row.get("CH_CLOSING_PRICE")),
             "vwap": to_float(row.get("VWAP")),
             "week_52_high": to_float(row.get("CH_52WEEK_HIGH_PRICE")),
@@ -396,21 +406,29 @@ class NSEHistory:
         }
 
     def _canonical_derivative_record(self, row: Dict[str, Any]) -> Dict[str, Any]:
+        expiry_date = coerce_date(row.get("FH_EXPIRY_DT"), "FH_EXPIRY_DT")
+        last_traded_price = to_float(row.get("FH_LAST_TRADED_PRICE"))
+        settlement_price = to_float(row.get("FH_SETTLE_PRICE"))
+        lot_size = to_int(row.get("FH_MARKET_LOT"))
         return {
             "date": coerce_date(row.get("FH_TIMESTAMP"), "FH_TIMESTAMP"),
             "symbol": normalize_symbol(row.get("FH_SYMBOL", "")),
             "instrument_type": str(row.get("FH_INSTRUMENT") or row.get("FH_INSTRUMENT_TYPE") or "").strip().upper(),
-            "expiry": coerce_date(row.get("FH_EXPIRY_DT"), "FH_EXPIRY_DT"),
+            "expiry_date": expiry_date,
+            "expiry": expiry_date,
             "option_type": (str(row.get("FH_OPTION_TYPE", "")).strip().upper() or None),
             "strike_price": to_float(row.get("FH_STRIKE_PRICE")),
             "open": to_float(row.get("FH_OPENING_PRICE")),
             "high": to_float(row.get("FH_TRADE_HIGH_PRICE")),
             "low": to_float(row.get("FH_TRADE_LOW_PRICE")),
             "close": to_float(row.get("FH_CLOSING_PRICE")),
-            "last_price": to_float(row.get("FH_LAST_TRADED_PRICE")),
-            "settle_price": to_float(row.get("FH_SETTLE_PRICE")),
+            "last_traded_price": last_traded_price,
+            "last_price": last_traded_price,
+            "settlement_price": settlement_price,
+            "settle_price": settlement_price,
             "volume": to_int(row.get("FH_TOT_TRADED_QTY")),
-            "market_lot": to_int(row.get("FH_MARKET_LOT")),
+            "lot_size": lot_size,
+            "market_lot": lot_size,
             "turnover": to_float(row.get("FH_TOT_TRADED_VAL")),
             "open_interest": to_int(row.get("FH_OPEN_INT")),
             "change_in_open_interest": to_int(row.get("FH_CHANGE_IN_OI")),
@@ -439,12 +457,7 @@ class NSEHistory:
         unavailable.  Downloads daily bhavcopy CSVs **in parallel** and
         extracts the requested symbol's rows.
         """
-        dates: List[date] = []
-        current = from_date
-        while current <= to_date:
-            if current.weekday() < 5:
-                dates.append(current)
-            current += timedelta(days=1)
+        dates = get_trading_days(from_date, to_date)
 
         if not dates:
             return []
@@ -830,4 +843,3 @@ def index_df(symbol, from_date, to_date):
 def index_pe_df(symbol, from_date, to_date):
     records = index_pe_raw(symbol, from_date, to_date)
     return dataframe_from_records(records, INDEX_PE_FIELDS)
-

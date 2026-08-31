@@ -207,7 +207,10 @@ class AsyncTokenBucket:
         self.capacity = float(tokens)
         self.tokens = float(tokens)
         self.refill_rate = float(refill_rate)
-        self._lock = asyncio.Lock()
+        # ``asyncio.Lock()`` requires a current event loop on Python 3.9.
+        # Keep construction synchronous and import-safe, then bind the lock
+        # to the loop that actually uses the bucket.
+        self._lock: asyncio.Lock | None = None
         self._last_refill = time.monotonic()
 
     async def acquire(self, cost: int = 1) -> None:
@@ -215,8 +218,12 @@ class AsyncTokenBucket:
             raise ValueError("cost must be a positive integer")
         if cost > self.capacity:
             raise ValueError("cost cannot exceed bucket capacity")
+        lock = self._lock
+        if lock is None:
+            lock = asyncio.Lock()
+            self._lock = lock
         while True:
-            async with self._lock:
+            async with lock:
                 now = time.monotonic()
                 elapsed = now - self._last_refill
                 self.tokens = min(
@@ -413,7 +420,10 @@ class NSEAsyncHttpClient:
         self._client = self._build_client()
         self._prime_path = _prime_path_for(self.base_url)
         self._primed = self._prime_path is None
-        self._prime_lock = asyncio.Lock()
+        # Constructing the client must not require a running event loop.  This
+        # is especially important for module-level dependency setup under
+        # Python 3.9, where ``asyncio.Lock()`` otherwise raises immediately.
+        self._prime_lock: asyncio.Lock | None = None
 
     def _build_client(self) -> httpx.AsyncClient:
         return httpx.AsyncClient(
@@ -441,8 +451,12 @@ class NSEAsyncHttpClient:
         if self._prime_path is None:
             self._primed = True
             return
+        prime_lock = self._prime_lock
+        if prime_lock is None:
+            prime_lock = asyncio.Lock()
+            self._prime_lock = prime_lock
         # Ensure only one priming runs at a time
-        async with self._prime_lock:
+        async with prime_lock:
             if self._primed and not force:
                 return
             try:
@@ -542,5 +556,3 @@ class NSEAsyncHttpClient:
             _expect_json=True,
         )
         return _decode_json_response(resp)
-
-

@@ -82,6 +82,28 @@ class TestHolidays:
         # Christmas 2024
         assert date(2024, 12, 25) in holidays(year=2024)
 
+    def test_official_2026_calendar_and_amendment_are_present(self):
+        expected = {
+            date(2026, 1, 15),
+            date(2026, 1, 26),
+            date(2026, 3, 3),
+            date(2026, 3, 26),
+            date(2026, 3, 31),
+            date(2026, 4, 3),
+            date(2026, 4, 14),
+            date(2026, 5, 1),
+            date(2026, 5, 28),
+            date(2026, 6, 26),
+            date(2026, 9, 14),
+            date(2026, 10, 2),
+            date(2026, 10, 20),
+            date(2026, 11, 10),
+            date(2026, 11, 24),
+            date(2026, 12, 25),
+        }
+
+        assert set(holidays(year=2026)) == expected
+
 
 class TestIsHoliday:
     """Tests for is_holiday function."""
@@ -118,6 +140,7 @@ class TestIsTradingDay:
     def test_holiday_not_trading_day(self):
         """Test that holidays are not trading days."""
         assert is_trading_day(date(2024, 1, 26)) is False  # Republic Day
+        assert is_trading_day(date(2026, 3, 31)) is False
     
     def test_friday_is_trading_day(self):
         """Test that Fridays are trading days."""
@@ -253,4 +276,3 @@ class TestEdgeCases:
         # Should include days from both years
         assert any(d.year == 2023 for d in result)
         assert any(d.year == 2024 for d in result)
-

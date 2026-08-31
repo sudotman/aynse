@@ -297,6 +297,7 @@ python scripts/bump_version.py patch --dry-run
 
 ## documentation
 
+- [Changelog](https://github.com/sudotman/aynse/blob/master/CHANGELOG.md)
 - [Historical Data Guide](docs/historical.md)
 - [Live Data Guide](docs/live.md)
 - [API Reference](docs/api.md)

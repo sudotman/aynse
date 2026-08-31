@@ -18,6 +18,7 @@ Canonical reference for the standardized `aynse` public API.
 - `stock_raw(symbol, from_date, to_date, series="EQ") -> list[dict]`
   - Canonical fields:
   - `date`, `symbol`, `series`, `open`, `high`, `low`, `close`, `previous_close`, `last_traded_price`, `vwap`, `week_52_high`, `week_52_low`, `volume`, `turnover`, `trades`
+  - Compatibility alias: `last_price` mirrors `last_traded_price`.
 - `stock_df(...) -> pandas.DataFrame`
 - `stock_csv(...) -> str`
 
@@ -41,6 +42,7 @@ Canonical reference for the standardized `aynse` public API.
 - `derivatives_raw(symbol, from_date, to_date, expiry_date, instrument_type, strike_price=None, option_type=None) -> list[dict]`
   - Canonical fields:
   - `date`, `symbol`, `instrument_type`, `expiry_date`, `option_type`, `strike_price`, `open`, `high`, `low`, `close`, `last_traded_price`, `settlement_price`, `volume`, `lot_size`, `turnover`, `open_interest`, `change_in_open_interest`
+  - Compatibility aliases: `expiry`, `last_price`, `settle_price`, and `market_lot` mirror their canonical counterparts.
 - `derivatives_df(...) -> pandas.DataFrame`
 - `derivatives_csv(...) -> str`
 
@@ -87,6 +89,9 @@ Canonical reference for the standardized `aynse` public API.
 ### Expiry calculations
 
 - `expiry_dates(dt, instrument_type="", symbol="", contracts=0, months_ahead=6) -> list[date]`
+  - This is an offline calendar calculation. NIFTY index options include weekly expiries; futures and other current contracts use their monthly cycle.
+  - The calculator applies historical weekday transitions per contract month and moves holiday expiries to the previous trading day.
+  - For the contracts currently listed by NSE, prefer `NSELive.option_chain_contract_info(symbol)`.
 
 ## Live data
 
@@ -158,6 +163,7 @@ All live methods return library-defined top-level payloads.
 - `NSELive.live_fno() -> dict`
 - `NSELive.bulk_equities_option_chain(symbols, max_workers=3) -> dict`
 - `NSELive.get_options_around_date(symbol, target_date, days_before=5, days_after=5) -> dict`
+  - Both date-window boundaries are inclusive and must be non-negative integers.
 - `NSELive.analyze_earnings_options(symbols_and_dates, max_workers=3) -> dict`
 - `NSELive.metadata() -> dict`
 
@@ -167,6 +173,7 @@ All live methods return library-defined top-level payloads.
   - Canonical fields:
   - `date`, `weekday`, `description`, `source`
 - `holidays(year=None, month=None) -> list[date]`
+  - The bundled offline NSE Capital Market calendar is maintained through 2026. Use `NSELive.holiday_list()` for exchange updates newer than the installed release.
 - `is_holiday(dt) -> bool`
 - `is_trading_day(dt) -> bool`
 - `get_trading_days(from_date, to_date) -> list[date]`
