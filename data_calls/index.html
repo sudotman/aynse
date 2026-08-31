@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
       
@@ -29,7 +29,7 @@
       
     
     
-      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
       
         
         <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
@@ -1335,6 +1335,7 @@
 <li><code>stock_raw(symbol, from_date, to_date, series="EQ") -&gt; list[dict]</code></li>
 <li>Canonical fields:</li>
 <li><code>date</code>, <code>symbol</code>, <code>series</code>, <code>open</code>, <code>high</code>, <code>low</code>, <code>close</code>, <code>previous_close</code>, <code>last_traded_price</code>, <code>vwap</code>, <code>week_52_high</code>, <code>week_52_low</code>, <code>volume</code>, <code>turnover</code>, <code>trades</code></li>
+<li>Compatibility alias: <code>last_price</code> mirrors <code>last_traded_price</code>.</li>
 <li><code>stock_df(...) -&gt; pandas.DataFrame</code></li>
 <li><code>stock_csv(...) -&gt; str</code></li>
 </ul>
@@ -1358,6 +1359,7 @@
 <li><code>derivatives_raw(symbol, from_date, to_date, expiry_date, instrument_type, strike_price=None, option_type=None) -&gt; list[dict]</code></li>
 <li>Canonical fields:</li>
 <li><code>date</code>, <code>symbol</code>, <code>instrument_type</code>, <code>expiry_date</code>, <code>option_type</code>, <code>strike_price</code>, <code>open</code>, <code>high</code>, <code>low</code>, <code>close</code>, <code>last_traded_price</code>, <code>settlement_price</code>, <code>volume</code>, <code>lot_size</code>, <code>turnover</code>, <code>open_interest</code>, <code>change_in_open_interest</code></li>
+<li>Compatibility aliases: <code>expiry</code>, <code>last_price</code>, <code>settle_price</code>, and <code>market_lot</code> mirror their canonical counterparts.</li>
 <li><code>derivatives_df(...) -&gt; pandas.DataFrame</code></li>
 <li><code>derivatives_csv(...) -&gt; str</code></li>
 </ul>
@@ -1403,6 +1405,9 @@
 <h3 id="expiry-calculations">Expiry calculations<a class="headerlink" href="#expiry-calculations" title="Permanent link">&para;</a></h3>
 <ul>
 <li><code>expiry_dates(dt, instrument_type="", symbol="", contracts=0, months_ahead=6) -&gt; list[date]</code></li>
+<li>This is an offline calendar calculation. NIFTY index options include weekly expiries; futures and other current contracts use their monthly cycle.</li>
+<li>The calculator applies historical weekday transitions per contract month and moves holiday expiries to the previous trading day.</li>
+<li>For the contracts currently listed by NSE, prefer <code>NSELive.option_chain_contract_info(symbol)</code>.</li>
 </ul>
 <h2 id="live-data">Live data<a class="headerlink" href="#live-data" title="Permanent link">&para;</a></h2>
 <p>All live methods return library-defined top-level payloads.</p>
@@ -1472,6 +1477,7 @@
 <li><code>NSELive.live_fno() -&gt; dict</code></li>
 <li><code>NSELive.bulk_equities_option_chain(symbols, max_workers=3) -&gt; dict</code></li>
 <li><code>NSELive.get_options_around_date(symbol, target_date, days_before=5, days_after=5) -&gt; dict</code></li>
+<li>Both date-window boundaries are inclusive and must be non-negative integers.</li>
 <li><code>NSELive.analyze_earnings_options(symbols_and_dates, max_workers=3) -&gt; dict</code></li>
 <li><code>NSELive.metadata() -&gt; dict</code></li>
 </ul>
@@ -1481,6 +1487,7 @@
 <li>Canonical fields:</li>
 <li><code>date</code>, <code>weekday</code>, <code>description</code>, <code>source</code></li>
 <li><code>holidays(year=None, month=None) -&gt; list[date]</code></li>
+<li>The bundled offline NSE Capital Market calendar is maintained through 2026. Use <code>NSELive.holiday_list()</code> for exchange updates newer than the installed release.</li>
 <li><code>is_holiday(dt) -&gt; bool</code></li>
 <li><code>is_trading_day(dt) -&gt; bool</code></li>
 <li><code>get_trading_days(from_date, to_date) -&gt; list[date]</code></li>
@@ -1633,7 +1640,7 @@
       <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.tabs.sticky", "navigation.sections", "navigation.expand", "navigation.path", "navigation.top", "navigation.footer", "search.suggest", "search.highlight", "search.share", "content.tabs.link", "content.code.annotation", "content.code.copy", "content.action.edit", "toc.follow"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
-      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
       
     
   </body>
