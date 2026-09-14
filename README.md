@@ -12,6 +12,7 @@
 - **historical data:** canonical stock, index, derivative, and index valuation records
 - **archive datasets:** bhavcopy, full bhavcopy, F&O bhavcopy, index bhavcopy, bulk deals, and index constituents
 - **live market data:** standardized quotes, option chains
+- **mutual funds:** official AMFI scheme search, latest and historical NAVs, comparisons, and NAV-based analytics
 - **cli:** simple commands for quick downloads
 - **resilient networking:** http/2, connection pooling, retries with exponential backoff, rate limiting, circuit breaker
 - **batching & streaming:** adaptive concurrency and low-memory processing
@@ -117,6 +118,34 @@ print(dataset_capabilities()["historical"]["outputs"])
 print(supported_indices()[:3])
 ```
 
+### mutual funds
+
+```python
+from aynse import mutual_fund_search, mutual_fund_summary, compare_mutual_funds
+
+matches = mutual_fund_search("Parag Parikh Flexi Cap Direct Growth")
+scheme_code = matches[0]["scheme_code"]
+
+summary = mutual_fund_summary(scheme_code, "2025-09-01", "2026-09-01")
+print(summary["scheme"]["scheme_name"])
+print(summary["metrics"])
+
+comparison = compare_mutual_funds(
+    [scheme_code, "120503"],
+    "2025-09-01",
+    "2026-09-01",
+)
+print(comparison["from_date"], comparison["to_date"])
+```
+
+Mutual-fund prices are end-of-day NAVs published by AMFI, not live exchange
+quotes. Return metrics are NAV returns, not total returns for IDCW options;
+cash distributions, loads, taxes, and investor cash flows are excluded. AMFI
+limits each historical download to 90 days, which `aynse` chunks automatically.
+Multi-fund comparisons retain only NAV dates shared by all selected schemes
+and recompute every metric from those exact observations, so return windows
+remain like-for-like.
+
 ## canonical contracts
 
 ### accepted inputs
@@ -213,6 +242,13 @@ the open-interest-weighted max-pain strike.
 - `NSELive.metadata`
 - `dataset_capabilities`, `supported_indices`, `supported_instruments`, `supported_event_categories`
 
+### mutual funds
+
+- `mutual_fund_latest_raw`, `mutual_fund_search`
+- `mutual_fund_history_raw`, `mutual_fund_history_df`
+- `mutual_fund_summary`, `analyze_mutual_fund`, `compare_mutual_funds`
+- `AMFIMutualFunds`
+
 ### analytics
 
 - `add_returns`
@@ -241,6 +277,10 @@ aynse bhavcopy -d downloads/ -f 2024-07-26
 
 # holidays
 aynse holidays -y 2024
+
+# AMFI mutual-fund discovery and NAV analytics
+aynse mf search "Parag Parikh Flexi Cap Direct Growth"
+aynse mf analyze -s 122639 -f 2025-09-01 -t 2026-09-01
 ```
 
 ## testing

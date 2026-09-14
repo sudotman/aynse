@@ -245,6 +245,48 @@ This page lists the standardized public API for `aynse`.
       show_root_heading: true
       show_source: false
 
+## Mutual funds
+
+::: aynse.mutual_funds.AMFIMutualFunds
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: aynse.mutual_funds.mutual_fund_latest_raw
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: aynse.mutual_funds.mutual_fund_search
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: aynse.mutual_funds.mutual_fund_history_raw
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: aynse.mutual_funds.mutual_fund_history_df
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: aynse.mutual_funds.mutual_fund_summary
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: aynse.mutual_funds.analyze_mutual_fund
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: aynse.mutual_funds.compare_mutual_funds
+    options:
+      show_root_heading: true
+      show_source: false
+
 ## Metadata and analytics
 
 ::: aynse.catalog.supported_indices

@@ -78,6 +78,12 @@ def dataset_capabilities() -> dict[str, Any]:
             ],
             "outputs": ["records", "summary", "dict"],
         },
+        "mutual_funds": {
+            "datasets": ["latest_nav", "scheme_search", "nav_history"],
+            "source": "AMFI",
+            "outputs": ["records", "dataframe", "summary", "comparison"],
+            "analytics_basis": "NAV return (not total return for IDCW options)",
+        },
         "analytics": {
             "datasets": [
                 "returns",
@@ -91,6 +97,9 @@ def dataset_capabilities() -> dict[str, Any]:
                 "volume_metrics",
                 "option_chain_summary",
                 "event_window",
+                "mutual_fund_nav_return",
+                "mutual_fund_volatility",
+                "mutual_fund_drawdown",
             ],
         },
         "metadata": {

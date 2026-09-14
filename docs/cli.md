@@ -27,6 +27,7 @@ aynse --help
 | `derivatives` | Download derivatives (futures/options) data |
 | `quote` | Get live stock quote |
 | `holidays` | List trading holidays |
+| `mutual-fund` / `mf` | Search AMFI schemes and inspect/analyze historical NAVs |
 
 ## Bhavcopy Downloads
 
@@ -259,6 +260,33 @@ Trading holidays for 2024:
 
 Total: 16 holidays
 ```
+
+## Mutual funds
+
+Search current AMFI scheme codes:
+
+```bash
+aynse mf search "Parag Parikh Flexi Cap Direct Growth" --limit 10
+```
+
+View the latest observations in a date range, or save all observations to CSV:
+
+```bash
+aynse mf history -s 122639 -f 2025-09-01 -t 2026-09-01
+aynse mf history -s 122639 -f 2025-09-01 -t 2026-09-01 -o nav.csv
+```
+
+Calculate NAV return, CAGR (for periods of at least 365 days), annualized
+volatility, and maximum drawdown:
+
+```bash
+aynse mf analyze -s 122639 -f 2025-09-01 -t 2026-09-01
+aynse mf analyze -s 122639 -f 2025-09-01 -t 2026-09-01 --json-output
+```
+
+AMFI publishes end-of-day NAVs. These metrics are NAV returns rather than total
+returns for IDCW options; cash distributions, loads, taxes, and cash flows are
+excluded.
 
 ## Exit Codes
 

@@ -1,6 +1,8 @@
 from click.testing import CliRunner
 from pyfakefs.fake_filesystem_unittest import TestCase
 from aynse.cli import cli
+from datetime import date
+from unittest.mock import patch
 
 class TestCli(TestCase):
     def setUp(self):
@@ -28,6 +30,7 @@ class TestCli(TestCase):
         assert "bhavcopy" in result.output
         assert "stock" in result.output
         assert "derivatives" in result.output
+        assert "mutual-fund" in result.output
 
     def test_holidays_cli_output(self):
         """Holidays command should print selected year and summary count."""
@@ -127,3 +130,81 @@ class TestCli(TestCase):
     #         assert rows[-1][1] == "01 Jan 2020"
     #         assert len(rows) > 50
 
+
+def test_mutual_fund_search_cli() -> None:
+    runner = CliRunner()
+    with patch(
+        "aynse.cli.mutual_fund_search",
+        return_value=[
+            {
+                "scheme_code": "122639",
+                "scheme_name": "Parag Parikh Flexi Cap Fund - Direct Plan - Growth",
+                "latest_nav": 89.5712,
+                "latest_nav_date": "2026-09-11",
+            }
+        ],
+    ):
+        result = runner.invoke(cli, ["mf", "search", "Parag Parikh", "--limit", "5"])
+
+    assert result.exit_code == 0
+    assert "122639" in result.output
+    assert "89.5712" in result.output
+
+
+def test_mutual_fund_history_cli() -> None:
+    runner = CliRunner()
+    with patch(
+        "aynse.cli.mutual_fund_history_raw",
+        return_value=[
+            {
+                "scheme_code": "122639",
+                "scheme_name": "Example Direct Growth Fund",
+                "date": date(2026, 9, 10),
+                "nav": 20.0,
+            },
+            {
+                "scheme_code": "122639",
+                "scheme_name": "Example Direct Growth Fund",
+                "date": date(2026, 9, 11),
+                "nav": 20.5,
+            },
+        ],
+    ):
+        result = runner.invoke(
+            cli,
+            ["mutual-fund", "history", "-s", "122639", "-f", "2026-09-01", "-t", "2026-09-11"],
+        )
+
+    assert result.exit_code == 0
+    assert "Example Direct Growth Fund" in result.output
+    assert "2026-09-11\t20.5" in result.output
+
+
+def test_mutual_fund_analyze_cli_discloses_nav_basis() -> None:
+    runner = CliRunner()
+    with patch(
+        "aynse.cli.mutual_fund_summary",
+        return_value={
+            "scheme": {
+                "scheme_name": "Example Direct Growth Fund",
+                "plan": "Direct Plan",
+                "option": "Growth",
+            },
+            "as_of_date": "2026-09-11",
+            "metrics": {
+                "observations": 252,
+                "absolute_return_percent": 12.0,
+                "cagr_percent": 11.5,
+                "annualized_volatility_percent": 14.0,
+                "max_drawdown_percent": -8.0,
+            },
+        },
+    ):
+        result = runner.invoke(
+            cli,
+            ["mf", "analyze", "-s", "122639", "-f", "2025-09-01", "-t", "2026-09-11"],
+        )
+
+    assert result.exit_code == 0
+    assert "Absolute NAV return: 12.0" in result.output
+    assert "IDCW cash distributions" in result.output

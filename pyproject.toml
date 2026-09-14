@@ -4,14 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aynse"
-version = "2.3.1"
+version = "2.3.2"
 requires-python = ">=3.9"
 authors = [{name = "satyam-kashyap", email = "satyamsudo@gmail.com"}]
-description = "A lean and modern Python library to fetch data from NSE (National Stock Exchange of India)"
+description = "A lean Python library for Indian market data from NSE, AMFI, and RBI"
 readme = "README.md"
 license = "MIT"
 dynamic = ["dependencies"]
-keywords = ["nse", "bhavcopy", "aynse", "stock", "market", "india", "finance"]
+keywords = ["nse", "amfi", "mutual-funds", "bhavcopy", "aynse", "stock", "market", "india", "finance"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Programming Language :: Python :: 3",

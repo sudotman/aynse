@@ -111,6 +111,7 @@ nav:
   - Getting Started:
     - Historical Data: historical.md
     - Live Data: live.md
+    - Mutual Funds: mutual_funds.md
     - CLI: cli.md
   - Reference:
     - API Reference: api.md

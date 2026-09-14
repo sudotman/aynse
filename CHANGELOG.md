@@ -2,6 +2,28 @@
 
 All notable user-facing changes to `aynse` are recorded here.
 
+## 2.3.2 - 2026-09-14
+
+### Added
+
+- Added official AMFI latest-NAV search and historical mutual-fund NAV data,
+  exposed as records, pandas DataFrames, summaries, and multi-fund comparisons.
+- Added NAV-return, CAGR, annualized-volatility, and maximum-drawdown metrics.
+- Added `aynse mutual-fund` / `aynse mf` CLI commands for search, history, and
+  analysis.
+
+### Reliability
+
+- Historical AMFI requests are scoped to the scheme's AMC, streamed, retried,
+  and split into AMFI's documented maximum 90-day windows.
+- AMFI report parsing is header-driven and accepts both the current 2026
+  eight-column formats and the legacy layouts being retired by AMFI.
+- Analytics explicitly identify themselves as NAV returns. Cash distributions
+  from IDCW options, loads, taxes, and investor cash flows are not treated as
+  total return.
+- Multi-fund comparisons align every series and metric to common NAV dates.
+- Per-client caches keep custom sessions and cache policies isolated.
+
 ## 2.3.1 - 2026-08-10
 
 ### Fixed

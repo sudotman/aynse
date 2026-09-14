@@ -5,6 +5,7 @@ This package provides:
 - Historical data: stocks, indices, derivatives
 - Bhavcopy: equity, F&O, index downloads
 - Live market data: real-time quotes
+- Mutual funds: official AMFI NAV discovery, history, and analytics
 - CLI: simple commands for quick downloads
 - Resilient networking: HTTP/2, pooling, retries, rate limit, circuit breaker
 - Batching & streaming: adaptive concurrency and low-memory processing
@@ -90,6 +91,16 @@ from .nse import (
 
 from .holidays import holidays, holiday_records
 from .rbi import RBI, policy_rate_archive
+from .mutual_funds import (
+    AMFIMutualFunds,
+    analyze_mutual_fund,
+    compare_mutual_funds,
+    mutual_fund_history_df,
+    mutual_fund_history_raw,
+    mutual_fund_latest_raw,
+    mutual_fund_search,
+    mutual_fund_summary,
+)
 from .catalog import dataset_capabilities, supported_event_categories, supported_indices, supported_instruments
 from .analytics import (
     add_atr,
@@ -177,6 +188,15 @@ __all__ = [
     # RBI
     "RBI",
     "policy_rate_archive",
+    # Mutual funds
+    "AMFIMutualFunds",
+    "mutual_fund_latest_raw",
+    "mutual_fund_search",
+    "mutual_fund_history_raw",
+    "mutual_fund_history_df",
+    "mutual_fund_summary",
+    "analyze_mutual_fund",
+    "compare_mutual_funds",
     # Metadata
     "supported_indices",
     "supported_instruments",

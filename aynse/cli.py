@@ -13,6 +13,7 @@ from __future__ import annotations
 import os
 import sys
 import logging
+import json
 from datetime import date, datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
@@ -23,6 +24,12 @@ import requests
 from aynse import nse
 from aynse.holidays import holidays as list_holidays
 from aynse.rbi import RBI
+from aynse.mutual_funds import (
+    mutual_fund_history_raw,
+    mutual_fund_search,
+    mutual_fund_summary,
+)
+from aynse.standard import write_records_csv
 
 # Configure logging
 logging.basicConfig(
@@ -625,6 +632,111 @@ def quote_command(symbol: str) -> None:
     except Exception as e:
         click.echo(click.style(f"✗ Error: {e}", fg='red'), err=True)
         sys.exit(1)
+
+
+@cli.group("mutual-fund")
+def mutual_fund_group() -> None:
+    """Search and analyze official AMFI mutual-fund NAV data."""
+
+
+@mutual_fund_group.command("search")
+@click.argument("query")
+@click.option("--limit", "-n", default=20, show_default=True, type=click.IntRange(1, 100))
+def mutual_fund_search_command(query: str, limit: int) -> None:
+    """Search current AMFI schemes by name, code, ISIN, or fund house."""
+    try:
+        records = mutual_fund_search(query, limit=limit)
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+    if not records:
+        click.echo("No current AMFI schemes matched the query.")
+        return
+    click.echo("SCHEME CODE\tLATEST NAV\tNAV DATE\tSCHEME")
+    for row in records:
+        click.echo(
+            f"{row.get('scheme_code', '')}\t{row.get('latest_nav', '')}\t"
+            f"{row.get('latest_nav_date', '')}\t{row.get('scheme_name', '')}"
+        )
+
+
+@mutual_fund_group.command("history")
+@click.option("--scheme-code", "-s", required=True, help="Numeric AMFI scheme code")
+@click.option(
+    "--from", "-f", "from_date", required=True, type=click.DateTime(["%Y-%m-%d"]),
+    help="From date (YYYY-MM-DD)",
+)
+@click.option(
+    "--to", "-t", "to_date", required=True, type=click.DateTime(["%Y-%m-%d"]),
+    help="To date (YYYY-MM-DD)",
+)
+@click.option("--limit", "-n", default=20, show_default=True, type=click.IntRange(1, 1000))
+@click.option("--output", "-o", default="", type=click.Path(dir_okay=False), help="Optional CSV path")
+def mutual_fund_history_command(
+    scheme_code: str,
+    from_date: datetime,
+    to_date: datetime,
+    limit: int,
+    output: str,
+) -> None:
+    """Fetch daily NAV history for one AMFI scheme."""
+    try:
+        records = mutual_fund_history_raw(scheme_code, from_date.date(), to_date.date())
+        if output:
+            path = write_records_csv(output, records)
+            click.echo(click.style(f"✓ Saved {len(records)} NAV records to: {path}", fg="green"))
+            return
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+    if not records:
+        click.echo("AMFI returned no NAV observations for this period.")
+        return
+    click.echo(f"{records[-1].get('scheme_name', scheme_code)} ({scheme_code})")
+    click.echo("DATE\tNAV")
+    for row in records[-limit:]:
+        nav_date = row.get("date")
+        click.echo(f"{nav_date.isoformat() if isinstance(nav_date, date) else nav_date}\t{row.get('nav', '')}")
+
+
+@mutual_fund_group.command("analyze")
+@click.option("--scheme-code", "-s", required=True, help="Numeric AMFI scheme code")
+@click.option(
+    "--from", "-f", "from_date", required=True, type=click.DateTime(["%Y-%m-%d"]),
+    help="From date (YYYY-MM-DD)",
+)
+@click.option(
+    "--to", "-t", "to_date", required=True, type=click.DateTime(["%Y-%m-%d"]),
+    help="To date (YYYY-MM-DD)",
+)
+@click.option("--json-output", is_flag=True, help="Print the complete summary as JSON")
+def mutual_fund_analyze_command(
+    scheme_code: str,
+    from_date: datetime,
+    to_date: datetime,
+    json_output: bool,
+) -> None:
+    """Calculate NAV return, volatility, and drawdown metrics."""
+    try:
+        summary = mutual_fund_summary(scheme_code, from_date.date(), to_date.date())
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+    if json_output:
+        click.echo(json.dumps(summary, default=str, indent=2))
+        return
+    scheme = summary.get("scheme") or {}
+    metrics = summary.get("metrics") or {}
+    click.echo(f"{scheme.get('scheme_name', scheme_code)} ({scheme_code})")
+    click.echo(f"Plan / option: {scheme.get('plan') or 'N/A'} / {scheme.get('option') or 'N/A'}")
+    click.echo(f"AMFI NAV as of: {summary.get('as_of_date') or 'N/A'}")
+    click.echo(f"Observations: {metrics.get('observations', 0)}")
+    click.echo(f"Absolute NAV return: {metrics.get('absolute_return_percent')}")
+    click.echo(f"CAGR (>= 365 days only): {metrics.get('cagr_percent')}")
+    click.echo(f"Annualized volatility: {metrics.get('annualized_volatility_percent')}")
+    click.echo(f"Maximum drawdown: {metrics.get('max_drawdown_percent')}")
+    click.echo("Basis: NAV return; IDCW cash distributions, loads, taxes, and cash flows are excluded.")
+
+
+# Concise alias for interactive use while retaining a descriptive help entry.
+cli.add_command(mutual_fund_group, "mf")
 
 
 if __name__ == "__main__":

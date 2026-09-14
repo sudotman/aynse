@@ -1,6 +1,6 @@
 # aynse
 
-A standardized Python library for working with National Stock Exchange (NSE) and RBI datasets in a predictable `records / dataframe / save` style.
+A standardized Python library for working with NSE, AMFI mutual-fund, and RBI datasets in a predictable `records / dataframe / save` style.
 
 <div class="grid cards" markdown>
 
@@ -40,7 +40,7 @@ A standardized Python library for working with National Stock Exchange (NSE) and
 
 ## Features
 
-- **Standardized contracts:** canonical Python-native records across history, archives, live, holidays, and RBI
+- **Standardized contracts:** canonical Python-native records across history, archives, live, mutual funds, holidays, and RBI
 - **Historical data:** stocks, indices, derivatives (F&O)
 - **Archives:** bhavcopy, bulk deals, index constituents, and dataframe/save helpers
 - **Live market data:** real-time quotes, option chains, corporate announcements, actions, and results calendars
