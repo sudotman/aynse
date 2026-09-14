@@ -13,7 +13,7 @@
         <link rel="canonical" href="https://satyamkashyap.com/aynse/cli/">
       
       
-        <link rel="prev" href="../live/">
+        <link rel="prev" href="../mutual_funds/">
       
       
         <link rel="next" href="../api/">
@@ -484,6 +484,34 @@
                 
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../mutual_funds/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mutual Funds
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
     
   
   
@@ -865,6 +893,17 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mutual-funds" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mutual funds
+      
+    </span>
+  </a>
   
 </li>
       
@@ -1383,6 +1422,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#mutual-funds" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mutual funds
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#exit-codes" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1530,6 +1580,10 @@
 <tr>
 <td><code>holidays</code></td>
 <td>List trading holidays</td>
+</tr>
+<tr>
+<td><code>mutual-fund</code> / <code>mf</code></td>
+<td>Search AMFI schemes and inspect/analyze historical NAVs</td>
 </tr>
 </tbody>
 </table>
@@ -1822,6 +1876,22 @@
 </span><span id="__span-21-7"><a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a>
 </span><span id="__span-21-8"><a id="__codelineno-21-8" name="__codelineno-21-8" href="#__codelineno-21-8"></a>Total: 16 holidays
 </span></code></pre></div>
+<h2 id="mutual-funds">Mutual funds<a class="headerlink" href="#mutual-funds" title="Permanent link">&para;</a></h2>
+<p>Search current AMFI scheme codes:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>aynse<span class="w"> </span>mf<span class="w"> </span>search<span class="w"> </span><span class="s2">"Parag Parikh Flexi Cap Direct Growth"</span><span class="w"> </span>--limit<span class="w"> </span><span class="m">10</span>
+</span></code></pre></div>
+<p>View the latest observations in a date range, or save all observations to CSV:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>aynse<span class="w"> </span>mf<span class="w"> </span><span class="nb">history</span><span class="w"> </span>-s<span class="w"> </span><span class="m">122639</span><span class="w"> </span>-f<span class="w"> </span><span class="m">2025</span>-09-01<span class="w"> </span>-t<span class="w"> </span><span class="m">2026</span>-09-01
+</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>aynse<span class="w"> </span>mf<span class="w"> </span><span class="nb">history</span><span class="w"> </span>-s<span class="w"> </span><span class="m">122639</span><span class="w"> </span>-f<span class="w"> </span><span class="m">2025</span>-09-01<span class="w"> </span>-t<span class="w"> </span><span class="m">2026</span>-09-01<span class="w"> </span>-o<span class="w"> </span>nav.csv
+</span></code></pre></div>
+<p>Calculate NAV return, CAGR (for periods of at least 365 days), annualized
+volatility, and maximum drawdown:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>aynse<span class="w"> </span>mf<span class="w"> </span>analyze<span class="w"> </span>-s<span class="w"> </span><span class="m">122639</span><span class="w"> </span>-f<span class="w"> </span><span class="m">2025</span>-09-01<span class="w"> </span>-t<span class="w"> </span><span class="m">2026</span>-09-01
+</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>aynse<span class="w"> </span>mf<span class="w"> </span>analyze<span class="w"> </span>-s<span class="w"> </span><span class="m">122639</span><span class="w"> </span>-f<span class="w"> </span><span class="m">2025</span>-09-01<span class="w"> </span>-t<span class="w"> </span><span class="m">2026</span>-09-01<span class="w"> </span>--json-output
+</span></code></pre></div>
+<p>AMFI publishes end-of-day NAVs. These metrics are NAV returns rather than total
+returns for IDCW options; cash distributions, loads, taxes, and cash flows are
+excluded.</p>
 <h2 id="exit-codes">Exit Codes<a class="headerlink" href="#exit-codes" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -1843,17 +1913,17 @@
 </table>
 <h2 id="error-handling">Error Handling<a class="headerlink" href="#error-handling" title="Permanent link">&para;</a></h2>
 <p>The CLI provides helpful error messages:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># File not found (holiday)</span>
-</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>$<span class="w"> </span>aynse<span class="w"> </span>bhavcopy<span class="w"> </span>-d<span class="w"> </span>/tmp<span class="w"> </span>-f<span class="w"> </span><span class="m">2024</span>-01-26
-</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>✗<span class="w"> </span>No<span class="w"> </span>data<span class="w"> </span>available<span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="m">2024</span>-01-26<span class="w"> </span><span class="o">(</span>might<span class="w"> </span>be<span class="w"> </span>a<span class="w"> </span>holiday<span class="o">)</span>
-</span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a>
-</span><span id="__span-22-5"><a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a><span class="c1"># Invalid symbol</span>
-</span><span id="__span-22-6"><a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a>$<span class="w"> </span>aynse<span class="w"> </span>quote<span class="w"> </span>-s<span class="w"> </span>INVALID
-</span><span id="__span-22-7"><a id="__codelineno-22-7" name="__codelineno-22-7" href="#__codelineno-22-7"></a>✗<span class="w"> </span>Error:<span class="w"> </span>No<span class="w"> </span>data<span class="w"> </span>found<span class="w"> </span><span class="k">for</span><span class="w"> </span>symbol
-</span><span id="__span-22-8"><a id="__codelineno-22-8" name="__codelineno-22-8" href="#__codelineno-22-8"></a>
-</span><span id="__span-22-9"><a id="__codelineno-22-9" name="__codelineno-22-9" href="#__codelineno-22-9"></a><span class="c1"># Network timeout</span>
-</span><span id="__span-22-10"><a id="__codelineno-22-10" name="__codelineno-22-10" href="#__codelineno-22-10"></a>$<span class="w"> </span>aynse<span class="w"> </span>stock<span class="w"> </span>-s<span class="w"> </span>RELIANCE<span class="w"> </span>-f<span class="w"> </span><span class="m">2024</span>-01-01<span class="w"> </span>-t<span class="w"> </span><span class="m">2024</span>-03-31
-</span><span id="__span-22-11"><a id="__codelineno-22-11" name="__codelineno-22-11" href="#__codelineno-22-11"></a>✗<span class="w"> </span>Timeout<span class="w"> </span><span class="k">while</span><span class="w"> </span>downloading.<span class="w"> </span>Check<span class="w"> </span>your<span class="w"> </span>internet<span class="w"> </span>connection.
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="c1"># File not found (holiday)</span>
+</span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a>$<span class="w"> </span>aynse<span class="w"> </span>bhavcopy<span class="w"> </span>-d<span class="w"> </span>/tmp<span class="w"> </span>-f<span class="w"> </span><span class="m">2024</span>-01-26
+</span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a>✗<span class="w"> </span>No<span class="w"> </span>data<span class="w"> </span>available<span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="m">2024</span>-01-26<span class="w"> </span><span class="o">(</span>might<span class="w"> </span>be<span class="w"> </span>a<span class="w"> </span>holiday<span class="o">)</span>
+</span><span id="__span-25-4"><a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a>
+</span><span id="__span-25-5"><a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a><span class="c1"># Invalid symbol</span>
+</span><span id="__span-25-6"><a id="__codelineno-25-6" name="__codelineno-25-6" href="#__codelineno-25-6"></a>$<span class="w"> </span>aynse<span class="w"> </span>quote<span class="w"> </span>-s<span class="w"> </span>INVALID
+</span><span id="__span-25-7"><a id="__codelineno-25-7" name="__codelineno-25-7" href="#__codelineno-25-7"></a>✗<span class="w"> </span>Error:<span class="w"> </span>No<span class="w"> </span>data<span class="w"> </span>found<span class="w"> </span><span class="k">for</span><span class="w"> </span>symbol
+</span><span id="__span-25-8"><a id="__codelineno-25-8" name="__codelineno-25-8" href="#__codelineno-25-8"></a>
+</span><span id="__span-25-9"><a id="__codelineno-25-9" name="__codelineno-25-9" href="#__codelineno-25-9"></a><span class="c1"># Network timeout</span>
+</span><span id="__span-25-10"><a id="__codelineno-25-10" name="__codelineno-25-10" href="#__codelineno-25-10"></a>$<span class="w"> </span>aynse<span class="w"> </span>stock<span class="w"> </span>-s<span class="w"> </span>RELIANCE<span class="w"> </span>-f<span class="w"> </span><span class="m">2024</span>-01-01<span class="w"> </span>-t<span class="w"> </span><span class="m">2024</span>-03-31
+</span><span id="__span-25-11"><a id="__codelineno-25-11" name="__codelineno-25-11" href="#__codelineno-25-11"></a>✗<span class="w"> </span>Timeout<span class="w"> </span><span class="k">while</span><span class="w"> </span>downloading.<span class="w"> </span>Check<span class="w"> </span>your<span class="w"> </span>internet<span class="w"> </span>connection.
 </span></code></pre></div>
 <h2 id="tips">Tips<a class="headerlink" href="#tips" title="Permanent link">&para;</a></h2>
 <ol>
@@ -1910,7 +1980,7 @@
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../live/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Live Data">
+          <a href="../mutual_funds/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Mutual Funds">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -1920,7 +1990,7 @@
                 Previous
               </span>
               <div class="md-ellipsis">
-                Live Data
+                Mutual Funds
               </div>
             </div>
           </a>
