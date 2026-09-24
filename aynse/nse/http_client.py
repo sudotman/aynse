@@ -307,6 +307,18 @@ class NSEHttpClient:
     def close(self) -> None:
         self._client.close()
 
+    def reset_session(self) -> None:
+        """Drop pooled connections and cookies; the next request re-primes.
+
+        Long scraping runs can leave the shared HTTP/2 connection in a state
+        where NSE resets every stream, and cooldowns alone never recover it.
+        Call this only while no requests are in flight on this client.
+        """
+        with self._prime_lock:
+            self._recreate_client()
+        # Give the fresh session a chance instead of failing fast on stale state.
+        self._circuit.record_success()
+
     def _respect_retry_after(self, resp: httpx.Response) -> None:
         if resp.status_code == 429:
             ra = resp.headers.get("Retry-After")

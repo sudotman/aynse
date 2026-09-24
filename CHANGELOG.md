@@ -2,6 +2,31 @@
 
 All notable user-facing changes to `aynse` are recorded here.
 
+## 2.4.0 - 2026-09-24
+
+### Added
+
+- Added `aynse.ipo`: every NSE-listed public issue (mainboard, SME, REIT,
+  InvIT, debt) with issue terms, the category-wise subscription book, lot
+  sizes, and listing-day OHLC/VWAP.
+- Added listing backtests: returns at the listing open, VWAP, close, high, and
+  low; holding horizons from one session to one year; best/worst first month;
+  and rupee P&L per minimum application, with and without mainboard retail
+  allotment odds (`1 / retail subscription`, conservative).
+- Added `summarize_ipo_backtest` for strategy, year, board, subscription, and
+  issue-size cohorts plus an apply-to-everything P&L curve.
+- Added `ipo_live_issues` for open and forthcoming IPOs with live subscription.
+- Added `aynse ipo list|current|show|backtest` CLI commands; `backtest --cache`
+  refreshes a saved dataset incrementally.
+- Added `NSEHttpClient.reset_session()` to rebuild a connection NSE has started
+  resetting.
+
+### Fixed
+
+- Stock and derivatives history now use NSE's `/api/historicalOR/*` routes.
+  The retired `/api/historical/*` routes return 503, which silently pushed
+  stock history onto the slower bhavcopy fallback.
+
 ## 2.3.2 - 2026-09-14
 
 ### Added

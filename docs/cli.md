@@ -28,6 +28,7 @@ aynse --help
 | `quote` | Get live stock quote |
 | `holidays` | List trading holidays |
 | `mutual-fund` / `mf` | Search AMFI schemes and inspect/analyze historical NAVs |
+| `ipo` | List NSE IPOs, show one issue, and backtest listing-day exits (`ipo backtest --cache ipos.json`) |
 
 ## Bhavcopy Downloads
 

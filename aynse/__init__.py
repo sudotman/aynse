@@ -6,6 +6,7 @@ This package provides:
 - Bhavcopy: equity, F&O, index downloads
 - Live market data: real-time quotes
 - Mutual funds: official AMFI NAV discovery, history, and analytics
+- IPOs: NSE issue lists, subscription books, and listing-day backtests
 - CLI: simple commands for quick downloads
 - Resilient networking: HTTP/2, pooling, retries, rate limit, circuit breaker
 - Batching & streaming: adaptive concurrency and low-memory processing
@@ -100,6 +101,24 @@ from .mutual_funds import (
     mutual_fund_latest_raw,
     mutual_fund_search,
     mutual_fund_summary,
+)
+from .ipo import (
+    NSEIpo,
+    analyze_listing_performance,
+    filter_ipo_records,
+    ipo_backtest,
+    ipo_backtest_df,
+    ipo_current_issues,
+    ipo_detail,
+    ipo_listing_performance,
+    ipo_live_issues,
+    ipo_past_issues,
+    ipo_record_needs_refresh,
+    ipo_report,
+    ipo_upcoming_issues,
+    return_distribution,
+    subscription_bucket,
+    summarize_ipo_backtest,
 )
 from .catalog import dataset_capabilities, supported_event_categories, supported_indices, supported_instruments
 from .analytics import (
@@ -197,6 +216,23 @@ __all__ = [
     "mutual_fund_summary",
     "analyze_mutual_fund",
     "compare_mutual_funds",
+    # IPOs
+    "NSEIpo",
+    "ipo_past_issues",
+    "ipo_current_issues",
+    "ipo_upcoming_issues",
+    "ipo_live_issues",
+    "ipo_detail",
+    "ipo_listing_performance",
+    "ipo_report",
+    "ipo_backtest",
+    "ipo_backtest_df",
+    "ipo_record_needs_refresh",
+    "analyze_listing_performance",
+    "filter_ipo_records",
+    "summarize_ipo_backtest",
+    "return_distribution",
+    "subscription_bucket",
     # Metadata
     "supported_indices",
     "supported_instruments",

@@ -13,6 +13,7 @@
 - **archive datasets:** bhavcopy, full bhavcopy, F&O bhavcopy, index bhavcopy, bulk deals, and index constituents
 - **live market data:** standardized quotes, option chains
 - **mutual funds:** official AMFI scheme search, latest and historical NAVs, comparisons, and NAV-based analytics
+- **ipos:** every NSE mainboard and SME IPO since 2012 with subscription books, listing-day OHLC/VWAP, holding horizons, and allotment-adjusted backtests
 - **cli:** simple commands for quick downloads
 - **resilient networking:** http/2, connection pooling, retries with exponential backoff, rate limiting, circuit breaker
 - **batching & streaming:** adaptive concurrency and low-memory processing
@@ -146,6 +147,24 @@ Multi-fund comparisons retain only NAV dates shared by all selected schemes
 and recompute every metric from those exact observations, so return windows
 remain like-for-like.
 
+### ipos
+
+```python
+from aynse import ipo_backtest, ipo_live_issues, ipo_report, summarize_ipo_backtest
+
+record = ipo_report("ZOMATO")                 # subscription book + listing day + first-year path
+records = ipo_backtest(boards=["mainboard"])  # every listed issue; pass existing= to update incrementally
+summary = summarize_ipo_backtest(records, exit="open")
+print(summary["headline"]["median_pct"], summary["strategies"]["close"]["win_rate_pct"])
+print(ipo_live_issues()[:3])                  # open and forthcoming issues with live subscription
+```
+
+Returns are versus issue price, before brokerage and taxes. The listing-day
+high is an oracle bound; VWAP approximates an average fill. Mainboard retail
+allotment odds are estimated as `1 / retail subscription` (conservative); NSE
+does not publish SME category reservations. See `docs/ipo.md` for the full
+method.
+
 ## canonical contracts
 
 ### accepted inputs
@@ -248,6 +267,14 @@ the open-interest-weighted max-pain strike.
 - `mutual_fund_history_raw`, `mutual_fund_history_df`
 - `mutual_fund_summary`, `analyze_mutual_fund`, `compare_mutual_funds`
 - `AMFIMutualFunds`
+
+### ipos
+
+- `ipo_past_issues`, `ipo_current_issues`, `ipo_upcoming_issues`, `ipo_live_issues`
+- `ipo_detail`, `ipo_listing_performance`, `ipo_report`
+- `ipo_backtest`, `ipo_backtest_df`, `ipo_record_needs_refresh`
+- `summarize_ipo_backtest`, `filter_ipo_records`, `return_distribution`, `subscription_bucket`
+- `analyze_listing_performance`, `NSEIpo`
 
 ### analytics
 

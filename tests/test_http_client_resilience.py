@@ -268,3 +268,21 @@ def test_token_buckets_reject_impossible_costs(bucket_type) -> None:
                 await bucket.acquire(3)
 
         asyncio.run(run())
+
+
+def test_reset_session_rebuilds_transport_and_closes_circuit():
+    from aynse.nse.http_client import NSEHttpClient
+
+    client = NSEHttpClient(base_url="https://www.nseindia.com")
+    old_transport = client._client
+    client._primed = True
+    for _ in range(60):
+        client._circuit.record_failure()
+    assert client._circuit.allow() is False
+
+    client.reset_session()
+
+    assert client._client is not old_transport
+    assert client._primed is False
+    assert client._circuit.allow() is True
+    client.close()

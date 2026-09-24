@@ -169,8 +169,10 @@ class NSEHistory:
     def __init__(self):
 
         self.path_map = {
-            "stock_history": "/api/historical/cm/equity",
-            "derivatives": "/api/historical/fo/derivatives",
+            # NSE retired /api/historical/* (now 503) in favour of the
+            # /api/historicalOR/* routes, which return the same row schema.
+            "stock_history": "/api/historicalOR/cm/equity",
+            "derivatives": "/api/historicalOR/fo/derivatives",
             "equity_quote_page": "/get-quotes/equity",
         }
         self.base_url = "https://www.nseindia.com"

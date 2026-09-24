@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aynse"
-version = "2.3.2"
+version = "2.4.0"
 requires-python = ">=3.9"
 authors = [{name = "satyam-kashyap", email = "satyamsudo@gmail.com"}]
 description = "A lean Python library for Indian market data from NSE, AMFI, and RBI"

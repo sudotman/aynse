@@ -6,6 +6,7 @@ This module provides CLI commands for downloading NSE data:
 - stock: Download historical stock data
 - index: Download historical index data
 - derivatives: Download derivatives data
+- ipo: List NSE IPOs and backtest listing-day exits
 """
 
 from __future__ import annotations
@@ -28,6 +29,15 @@ from aynse.mutual_funds import (
     mutual_fund_history_raw,
     mutual_fund_search,
     mutual_fund_summary,
+)
+from aynse.ipo import (
+    EQUITY_BOARDS,
+    IPO_EXIT_FIELDS,
+    ipo_backtest,
+    ipo_live_issues,
+    ipo_past_issues,
+    ipo_report,
+    summarize_ipo_backtest,
 )
 from aynse.standard import write_records_csv
 
@@ -733,6 +743,185 @@ def mutual_fund_analyze_command(
     click.echo(f"Annualized volatility: {metrics.get('annualized_volatility_percent')}")
     click.echo(f"Maximum drawdown: {metrics.get('max_drawdown_percent')}")
     click.echo("Basis: NAV return; IDCW cash distributions, loads, taxes, and cash flows are excluded.")
+
+
+def _fmt_pct(value: object) -> str:
+    return f"{float(value):+.1f}%" if isinstance(value, (int, float)) else "n/a"
+
+
+def _fmt_x(value: object) -> str:
+    return f"{float(value):.1f}x" if isinstance(value, (int, float)) else "n/a"
+
+
+def _ipo_boards(board: str) -> tuple:
+    return EQUITY_BOARDS if board == "equity" else (board,)
+
+
+@cli.group("ipo")
+def ipo_group() -> None:
+    """List NSE IPOs and backtest selling on listing day."""
+
+
+@ipo_group.command("list")
+@click.option("--board", "-b", default="equity", show_default=True,
+              type=click.Choice(["equity", "mainboard", "sme", "reit", "invit", "debt"]))
+@click.option("--from", "-f", "from_date", default=None, type=click.DateTime(["%Y-%m-%d"]), help="Listed on or after")
+@click.option("--to", "-t", "to_date", default=None, type=click.DateTime(["%Y-%m-%d"]), help="Listed on or before")
+@click.option("--limit", "-n", default=30, show_default=True, type=click.IntRange(1, 5000))
+def ipo_list_command(board: str, from_date: Optional[datetime], to_date: Optional[datetime], limit: int) -> None:
+    """List past public issues, newest listing first."""
+    try:
+        issues = ipo_past_issues(
+            from_date.date() if from_date else None,
+            to_date.date() if to_date else None,
+            _ipo_boards(board),
+        )
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo("LISTED\tSYMBOL\tBOARD\tISSUE PRICE\tCOMPANY")
+    for issue in issues[:limit]:
+        listed = issue.get("listing_date")
+        click.echo(
+            f"{listed.isoformat() if listed else 'pending'}\t{issue['symbol']}\t{issue['board']}\t"
+            f"{issue.get('issue_price') or 'n/a'}\t{issue.get('company_name') or ''}"
+        )
+
+
+@ipo_group.command("current")
+def ipo_current_command() -> None:
+    """Show IPOs open for bidding (with live subscription) and forthcoming ones."""
+    try:
+        rows = ipo_live_issues()
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo("STATUS\tSYMBOL\tBOARD\tCLOSES\tBAND\tSUBSCRIBED")
+    for row in rows:
+        closes = row.get("issue_end_date")
+        click.echo(
+            f"{row.get('status') or ''}\t{row['symbol']}\t{row['board']}\t"
+            f"{closes.isoformat() if closes else ''}\t{row.get('price_band_text') or ''}\t"
+            f"{_fmt_x(row.get('subscription_total_x'))}"
+        )
+
+
+@ipo_group.command("show")
+@click.argument("symbol")
+@click.option("--json-output", is_flag=True, help="Print the full record, including the daily path, as JSON")
+def ipo_show_command(symbol: str, json_output: bool) -> None:
+    """Show subscription and listing performance for one IPO."""
+    try:
+        record = ipo_report(symbol)
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+    if json_output:
+        click.echo(json.dumps(record, default=str, indent=2))
+        return
+    click.echo(f"{record.get('company_name') or record['symbol']} ({record['symbol']}, {record['board']})")
+    click.echo(f"Issue price: {record.get('issue_price')}  listed: {record.get('listing_date') or 'pending'}")
+    click.echo(
+        f"Subscription: total {_fmt_x(record.get('subscription_total_x'))}, "
+        f"retail {_fmt_x(record.get('subscription_retail_x'))}, QIB {_fmt_x(record.get('subscription_qib_x'))}"
+    )
+    if not record.get("has_listing_data"):
+        click.echo("No listing-day trades yet.")
+        return
+    listing = ", ".join(
+        f"{name} {_fmt_pct(record.get(f'return_{name}_pct'))}" for name in ("open", "high", "low", "close", "vwap")
+    )
+    held = ", ".join(f"{name} {_fmt_pct(record.get(f'return_{name}_pct'))}" for name in ("w1", "m1", "m3", "m6", "y1"))
+    click.echo(f"Listing day vs issue: {listing}")
+    click.echo(f"Held: {held}")
+    if record.get("allotment_probability") is not None:
+        click.echo(
+            f"Retail allotment odds ~{record['allotment_probability'] * 100:.1f}%; "
+            f"expected profit per application at open: {record.get('expected_profit_open')}"
+        )
+
+
+@ipo_group.command("backtest")
+@click.option("--board", "-b", default="equity", show_default=True,
+              type=click.Choice(["equity", "mainboard", "sme"]))
+@click.option("--from", "-f", "from_date", default=None, type=click.DateTime(["%Y-%m-%d"]), help="Listed on or after")
+@click.option("--to", "-t", "to_date", default=None, type=click.DateTime(["%Y-%m-%d"]), help="Listed on or before")
+@click.option("--exit", "-e", "exit_name", default="open", show_default=True, type=click.Choice(list(IPO_EXIT_FIELDS)))
+@click.option("--cache", "cache_path", default="", type=click.Path(dir_okay=False),
+              help="JSON file of previous records; only new or maturing IPOs are re-fetched")
+@click.option("--output", "-o", default="", type=click.Path(dir_okay=False), help="Optional CSV path for all records")
+@click.option("--workers", "-w", default=4, show_default=True, type=click.IntRange(1, 16))
+@click.option("--json-output", is_flag=True, help="Print the summary as JSON")
+def ipo_backtest_command(
+    board: str,
+    from_date: Optional[datetime],
+    to_date: Optional[datetime],
+    exit_name: str,
+    cache_path: str,
+    output: str,
+    workers: int,
+    json_output: bool,
+) -> None:
+    """Backtest buying IPOs at the issue price and selling on or after listing."""
+    # A full build makes thousands of requests; per-request INFO logs drown the progress line.
+    logging.getLogger("aynse.nse.http_client").setLevel(logging.WARNING)
+    existing = []
+    if cache_path and os.path.isfile(cache_path):
+        with open(cache_path, encoding="utf-8") as handle:
+            existing = json.load(handle)
+
+    def progress(done: int, total: int, record: dict) -> None:
+        if not json_output:
+            click.echo(f"\r  fetched {done}/{total} ({record.get('symbol')})".ljust(60), nl=False, err=True)
+
+    try:
+        records = ipo_backtest(
+            from_date.date() if from_date else None,
+            to_date.date() if to_date else None,
+            _ipo_boards(board),
+            existing=existing,
+            max_workers=workers,
+            progress=progress,
+        )
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+    if not json_output:
+        click.echo("", err=True)
+    if cache_path:
+        with open(cache_path, "w", encoding="utf-8") as handle:
+            json.dump(records, handle, default=str)
+    if output:
+        path = write_records_csv(output, records)
+        click.echo(click.style(f"Saved {len(records)} IPO records to: {path}", fg="green"), err=True)
+
+    summary = summarize_ipo_backtest(records, exit_name)
+    if json_output:
+        pnl = {key: value for key, value in summary["pnl"].items() if key != "curve"}
+        click.echo(json.dumps({**summary, "pnl": pnl}, default=str, indent=2))
+        return
+    click.echo(f"{summary['count']} listed IPOs, {summary['from_date']} to {summary['to_date']}")
+    click.echo("STRATEGY\tN\tMEDIAN\tMEAN\tWIN RATE")
+    for stats in summary["strategies"].values():
+        if stats.get("count"):
+            click.echo(
+                f"{stats['label']}\t{stats['count']}\t{_fmt_pct(stats['median_pct'])}\t"
+                f"{_fmt_pct(stats['mean_pct'])}\t{stats['win_rate_pct']:.0f}%"
+            )
+    for title, groups in (
+        (f"By total subscription ({summary['exit_label']})", summary["by_subscription"]),
+        ("By listing year", summary["by_year"]),
+    ):
+        click.echo(f"\n{title}:")
+        for group in groups:
+            click.echo(
+                f"  {group['group']:>8}\tn={group['count']}\tmedian {_fmt_pct(group.get('median_pct'))}\t"
+                f"win {group.get('win_rate_pct', 0):.0f}%"
+            )
+    pnl = summary["pnl"]
+    if pnl.get("mean_expected_profit_per_application") is not None:
+        click.echo(
+            f"\nMainboard retail, one minimum application each: "
+            f"~Rs.{pnl['mean_expected_profit_per_application']:,.0f} expected per application after "
+            f"allotment odds (Rs.{pnl['mean_profit_per_allotment']:,.0f} if allotted)."
+        )
+    click.echo(f"Basis: {summary['basis']}")
 
 
 # Concise alias for interactive use while retaining a descriptive help entry.

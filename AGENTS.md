@@ -18,6 +18,7 @@ Core capabilities:
 - `aynse/holidays.py`: holiday and trading-day helpers
 - `aynse/util.py`: shared parsing, caching, and concurrency utilities
 - `aynse/nse/history.py`: historical stock/index/derivatives APIs, CSV/DataFrame helpers, stock backend selection, bhavcopy fallback
+- `aynse/ipo.py`: NSE public issues, subscription books, listing-day/horizon backtests, throttle-aware batch builder, and summaries
 - `aynse/nse/archives.py`: bhavcopy, bulk deals, index constituents, expiry helpers
 - `aynse/nse/live.py`: live quote, market status, chart, option-chain, and announcement endpoints
 - `aynse/nse/http_client.py`: resilient HTTP client behavior for NSE/Nifty endpoints

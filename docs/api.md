@@ -287,6 +287,73 @@ This page lists the standardized public API for `aynse`.
       show_root_heading: true
       show_source: false
 
+## IPOs
+
+::: aynse.ipo.NSEIpo
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: aynse.ipo.ipo_past_issues
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: aynse.ipo.ipo_live_issues
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: aynse.ipo.ipo_detail
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: aynse.ipo.ipo_listing_performance
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: aynse.ipo.ipo_report
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: aynse.ipo.ipo_backtest
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: aynse.ipo.ipo_backtest_df
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: aynse.ipo.ipo_record_needs_refresh
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: aynse.ipo.analyze_listing_performance
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: aynse.ipo.filter_ipo_records
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: aynse.ipo.summarize_ipo_backtest
+    options:
+      show_root_heading: true
+      show_source: false
+
+::: aynse.ipo.return_distribution
+    options:
+      show_root_heading: true
+      show_source: false
+
 ## Metadata and analytics
 
 ::: aynse.catalog.supported_indices

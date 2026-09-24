@@ -84,6 +84,12 @@ def dataset_capabilities() -> dict[str, Any]:
             "outputs": ["records", "dataframe", "summary", "comparison"],
             "analytics_basis": "NAV return (not total return for IDCW options)",
         },
+        "ipo": {
+            "datasets": ["past_issues", "live_issues", "issue_detail", "listing_performance", "backtest"],
+            "source": "NSE",
+            "outputs": ["records", "dataframe", "summary"],
+            "analytics_basis": "Return versus issue price before costs; mainboard allotment odds = 1 / retail subscription",
+        },
         "analytics": {
             "datasets": [
                 "returns",
